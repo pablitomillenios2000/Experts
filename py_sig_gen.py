@@ -1,24 +1,47 @@
 import MetaTrader5 as mt5
 import pandas as pd
-from datetime import datetime
+import numpy as np
+from datetime import datetime, timedelta
 
 # Initialize MT5 connection
 if not mt5.initialize():
     print("MT5 initialize() failed")
     mt5.shutdown()
+    exit()
 
-# Fetch historical data (e.g., EURUSD, last 1000 bars on H1)
-rates = mt5.copy_rates_from_pos("EURUSD", mt5.TIMEFRAME_H1, 0, 1000)
+# Define the time range for September 2025
+start_date = datetime(2025, 9, 1)
+end_date = datetime(2025, 9, 30, 23, 59, 59)
+
+# Fetch historical data for EURUSD, H1 timeframe, for September 2025
+rates = mt5.copy_rates_range("EURUSD", mt5.TIMEFRAME_H1, start_date, end_date)
+if rates is None or len(rates) == 0:
+    print("Failed to fetch historical data for September 2025")
+    mt5.shutdown()
+    exit()
+
 df = pd.DataFrame(rates)
-df['ma'] = df['close'].rolling(window=20).mean()  # Simple MA crossover strategy
+df['time'] = pd.to_datetime(df['time'], unit='s')
 
-# Generate signal (example: BUY if close > MA)
-latest = df.iloc[-1]
-signal = "BUY" if latest['close'] > latest['ma'] else "SELL"
+# Generate 30 random indices for trade signals
+np.random.seed(42)  # For reproducibility
+random_indices = np.random.choice(df.index, size=30, replace=False)
+random_indices.sort()  # Sort to maintain chronological order
 
-# Save signal to CSV with timestamp
-timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-signal_data = pd.DataFrame([{"timestamp": timestamp, "signal": signal}])
-signal_data.to_csv("signals.csv", mode="a", index=False, header=not pd.io.common.file_exists("signals.csv"))
+# Create random BUY/SELL signals
+signals = np.random.choice(["BUY", "SELL"], size=30, p=[0.5, 0.5])
 
+# Create a DataFrame for the signals
+signal_data = pd.DataFrame({
+    "timestamp": df.loc[random_indices, "time"].dt.strftime("%Y-%m-%d %H:%M:%S"),
+    "signal": signals
+})
+
+# Save signals to CSV
+output_file = "signals.csv"
+signal_data.to_csv(output_file, mode="w", index=False, header=True)
+
+print(f"Generated 30 random trade signals and saved to {output_file}")
+
+# Shutdown MT5 connection
 mt5.shutdown()
