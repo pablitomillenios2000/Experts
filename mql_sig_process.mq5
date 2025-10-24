@@ -22,35 +22,73 @@ int signalCount = 0;
 //| Expert initialization function                                   |
 //+------------------------------------------------------------------+
 int OnInit() {
-   // Hardcode signals
-   signalCount = 2;
-   ArrayResize(signals, signalCount);
+   Print("Pablo initializing");
+   // Hardcode file locations in MQL5\Files directory
+   string filePath = "w.txt";
+   string signalsFilePath = "signals.csv";
+   // Get the full path to the files
+   string fullFilePath = TerminalInfoString(TERMINAL_DATA_PATH) + "\\MQL5\\Files\\" + filePath;
+   string fullSignalsFilePath = TerminalInfoString(TERMINAL_DATA_PATH) + "\\MQL5\\Files\\" + signalsFilePath;
    
-   signals[0].time = StringToTime("2025.10.02 09:40:00");
-   signals[0].type = "BUY";
-   signals[1].time = StringToTime("2025.10.14 09:40:00");
-   signals[1].type = "SELL";
-
-   // Verify signal times
-   for (int i = 0; i < signalCount; i++) {
-      if (signals[i].time == 0) {
-         Print("Invalid datetime for signal ", i);
-         return(INIT_FAILED);
-      }
+   // Open file for writing (w.txt)
+   int handle = FileOpen(filePath, FILE_WRITE | FILE_TXT | FILE_ANSI);
+   if (handle == INVALID_HANDLE) {
+      Print("Failed to open file for writing: ", fullFilePath, " Error: ", GetLastError());
+      return(INIT_FAILED);
    }
 
-   // Sort signals by time (already sorted, but included for robustness)
-   for (int i = 0; i < signalCount - 1; i++) {
-      for (int j = i + 1; j < signalCount; j++) {
-         if (signals[i].time > signals[j].time) {
-            Signal temp = signals[i];
-            signals[i] = signals[j];
-            signals[j] = temp;
+   // Write "hello" to the file
+   FileWrite(handle, "hello");
+   Print("Successfully wrote 'hello' to ", fullFilePath);
+   FileClose(handle);
+
+   // Open signals.csv for reading
+   int signalsHandle = FileOpen(signalsFilePath, FILE_READ | FILE_TXT | FILE_ANSI);
+   if (signalsHandle == INVALID_HANDLE) {
+      Print("Failed to open signals file: ", fullSignalsFilePath, " Error: ", GetLastError());
+      return(INIT_FAILED);
+   }
+
+   // Resize signals array dynamically
+   signalCount = 0;
+   while (!FileIsEnding(signalsHandle)) {
+      string line = FileReadString(signalsHandle);
+      if (line == "") continue; // Skip empty lines
+
+      // Split the line into timestamp and signal
+      string parts[];
+      if (StringSplit(line, ',', parts) == 2) {
+         // Resize signals array
+         ArrayResize(signals, signalCount + 1);
+         
+         // Parse timestamp and signal
+         signals[signalCount].time = StringToTime(parts[0]);
+         signals[signalCount].type = parts[1];
+         StringTrimLeft(signals[signalCount].type);
+         StringTrimRight(signals[signalCount].type);
+         
+         // Validate signal type
+         if (signals[signalCount].type != "BUY" && signals[signalCount].type != "SELL") {
+            Print("Invalid signal type in line: ", line);
+            continue;
          }
+         
+         // Validate timestamp
+         if (signals[signalCount].time == 0) {
+            Print("Invalid timestamp in line: ", line);
+            continue;
+         }
+         
+         signalCount++;
+         Print("Loaded signal: ", parts[0], ", ", signals[signalCount-1].type);
+      } else {
+         Print("Invalid CSV format in line: ", line);
       }
    }
 
-   Print("Loaded ", signalCount, " hardcoded signals.");
+   FileClose(signalsHandle);
+   Print("Loaded ", signalCount, " signals from ", fullSignalsFilePath);
+
    return(INIT_SUCCEEDED);
 }
 
