@@ -4,7 +4,6 @@
 #property strict
 #property script_show_inputs
 
-
 // Input parameters if needed, but none for now
 
 void OnStart()
@@ -117,7 +116,7 @@ void OnStart()
 // Function to write to CSV
 void WriteToCsv(string filename, datetime &times[], double &values[], int count)
 {
-    int file_handle = FileOpen(filename, FILE_WRITE | FILE_CSV | FILE_ANSI);
+    int file_handle = FileOpen(filename, FILE_WRITE | FILE_CSV | FILE_ANSI, ',');
     if (file_handle == INVALID_HANDLE) {
         Print("Failed to open file: ", filename);
         return;

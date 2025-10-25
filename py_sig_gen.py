@@ -9,7 +9,7 @@ if not mt5.initialize():
     mt5.shutdown()
     exit()
 
-terminal_prefix = "C:\\Users\\Pablo\\AppData\\Roaming\\MetaQuotes\\Terminal\\D0E8209F77C8CF37AD8BF550E51FF075\\MQL5\\Files"
+terminal_prefix = "C:\\Users\\Pablo\\AppData\\Roaming\\MetaQuotes\\Terminal\\D0E8209F77C8CF37AD8BF550E51FF075\\MQL5\\Files\\"
 rsi1tesla_file = "1mrsitesla.csv"
 rsi5tesla_file = "5mrsitesla.csv"
 stochtesla_file = "1mstochtsla.csv"
@@ -31,66 +31,59 @@ if rates_m1_tsla is None or len(rates_m1_tsla) == 0:
     mt5.shutdown()
     exit()
 
-# Fetch historical data for TSLA, M5 timeframe
-rates_m5_tsla = mt5.copy_rates_range("TSLA", mt5.TIMEFRAME_M5, start_date, end_date)
-if rates_m5_tsla is None or len(rates_m5_tsla) == 0:
-    print("Failed to fetch 5-minute historical data for TSLA for October 2025")
-    mt5.shutdown()
-    exit()
-
-# Fetch historical data for NDXUSD, M1 timeframe
-rates_m1_ndx = mt5.copy_rates_range("NDXUSD", mt5.TIMEFRAME_M1, start_date, end_date)
-if rates_m1_ndx is None or len(rates_m1_ndx) == 0:
-    print("Failed to fetch 1-minute historical data for NDXUSD for October 2025")
-    mt5.shutdown()
-    exit()
-
-# Create DataFrames
+# Create DataFrame for TSLA M1
 df_m1_tsla = pd.DataFrame(rates_m1_tsla)
 df_m1_tsla['time'] = pd.to_datetime(df_m1_tsla['time'], unit='s')
-df_m5_tsla = pd.DataFrame(rates_m5_tsla)
-df_m5_tsla['time'] = pd.to_datetime(df_m5_tsla['time'], unit='s')
-df_m1_ndx = pd.DataFrame(rates_m1_ndx)
-df_m1_ndx['time'] = pd.to_datetime(df_m1_ndx['time'], unit='s')
 
-# Calculate RSI (14-period) for all data
-def calculate_rsi(data, periods=14):
-    delta = data['close'].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=periods).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=periods).mean()
-    rs = gain / loss
-    rsi = 100 - (100 / (1 + rs))
-    return rsi
+# Read CSV files
+try:
+    # Read 1-minute RSI for TSLA
+    df_rsi1_tsla = pd.read_csv(rsi1teslainput, parse_dates=['Timestamp'], date_format='%Y.%m.%d %H:%M:%S')
+    df_rsi1_tsla = df_rsi1_tsla.rename(columns={'Timestamp': 'time', 'Value': 'rsi'})
+    
+    # Read 5-minute RSI for TSLA
+    df_rsi5_tsla = pd.read_csv(rsi5teslainput, parse_dates=['Timestamp'], date_format='%Y.%m.%d %H:%M:%S')
+    df_rsi5_tsla = df_rsi5_tsla.rename(columns={'Timestamp': 'time', 'Value': 'rsi_m5'})
+    
+    # Read 1-minute Stochastic for TSLA
+    df_stoch_tsla = pd.read_csv(stochteslainput, parse_dates=['Timestamp'], date_format='%Y.%m.%d %H:%M:%S')
+    df_stoch_tsla = df_stoch_tsla.rename(columns={'Timestamp': 'time', 'Value': '%K_smooth'})
+    
+    # Read 1-minute RSI for NDXUSD
+    df_rsi1_ndx = pd.read_csv(rsi1ndqusdinput, parse_dates=['Timestamp'], date_format='%Y.%m.%d %H:%M:%S')
+    df_rsi1_ndx = df_rsi1_ndx.rename(columns={'Timestamp': 'time', 'Value': 'rsi_ndx'})
+except Exception as e:
+    print(f"Failed to read CSV files: {e}")
+    mt5.shutdown()
+    exit()
 
-df_m1_tsla['rsi'] = calculate_rsi(df_m1_tsla)
-df_m5_tsla['rsi'] = calculate_rsi(df_m5_tsla)
-df_m1_ndx['rsi'] = calculate_rsi(df_m1_ndx)
-
-# Calculate Stochastic Oscillator (14, 3, 3) for TSLA M1
-def calculate_stochastic(df, k_period=14, d_period=3, smooth=3):
-    df['lowest_low'] = df['low'].rolling(window=k_period).min()
-    df['highest_high'] = df['high'].rolling(window=k_period).max()
-    df['%K'] = 100 * (df['close'] - df['lowest_low']) / (df['highest_high'] - df['lowest_low'])
-    df['%K_smooth'] = df['%K'].rolling(window=smooth).mean()
-    df['%D'] = df['%K_smooth'].rolling(window=d_period).mean()
-    return df
-
-df_m1_tsla = calculate_stochastic(df_m1_tsla)
-
-# Align 5-minute TSLA RSI and 1-minute NDXUSD RSI with 1-minute TSLA data
+# Align data with 1-minute TSLA DataFrame
 df_m1_tsla = df_m1_tsla.merge(
-    df_m5_tsla[['time', 'rsi']].rename(columns={'rsi': 'rsi_m5'}),
+    df_rsi1_tsla[['time', 'rsi']],
     left_on='time',
     right_on='time',
     how='left'
 ).merge(
-    df_m1_ndx[['time', 'rsi']].rename(columns={'rsi': 'rsi_ndx'}),
+    df_rsi5_tsla[['time', 'rsi_m5']],
+    left_on='time',
+    right_on='time',
+    how='left'
+).merge(
+    df_stoch_tsla[['time', '%K_smooth']],
+    left_on='time',
+    right_on='time',
+    how='left'
+).merge(
+    df_rsi1_ndx[['time', 'rsi_ndx']],
     left_on='time',
     right_on='time',
     how='left'
 )
+
 # Forward-fill to align data
+df_m1_tsla['rsi'] = df_m1_tsla['rsi'].ffill()
 df_m1_tsla['rsi_m5'] = df_m1_tsla['rsi_m5'].ffill()
+df_m1_tsla['%K_smooth'] = df_m1_tsla['%K_smooth'].ffill()
 df_m1_tsla['rsi_ndx'] = df_m1_tsla['rsi_ndx'].ffill()
 
 # Generate BUY signals (RSI M1 TSLA < 30, RSI M5 TSLA < 35, RSI M1 NDXUSD < 30) with rule: no new BUY until previous SELL
