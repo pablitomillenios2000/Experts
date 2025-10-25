@@ -33,5 +33,5 @@ to convert from TV to MT5 add +3.5 hours
 
 1) RSI 14, 5m Oversold < 35
 2) RSI 14 , 1m Oversold < 30
-3) Stoch-K > 30
+3) Stoch-K > 80
 4) IXIC =>, 1m RSI14 Oversold <30
