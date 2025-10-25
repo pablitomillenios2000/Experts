@@ -10,7 +10,7 @@ void OnStart()
 {
     // Define symbols and timeframes
     string symbol_tsla = "TSLA";
-    string symbol_ndx = "NDXUSD";
+    string symbol_ndx = "QQQ"; //invesco QQQ Trust as proxy for NDXUSD
     ENUM_TIMEFRAMES tf_m1 = PERIOD_M1;
     ENUM_TIMEFRAMES tf_m5 = PERIOD_M5;
 
