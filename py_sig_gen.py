@@ -10,13 +10,13 @@ if not mt5.initialize():
     exit()
 
 # Define the time range for September 2025
-start_date = datetime(2025, 9, 1)
-end_date = datetime(2025, 9, 30, 23, 59, 59)
+start_date = datetime(2025, 10, 1)
+end_date = datetime(2025, 10, 23, 23, 59, 59)
 
-# Fetch historical data for EURUSD, H1 timeframe, for September 2025
-rates = mt5.copy_rates_range("EURUSD", mt5.TIMEFRAME_H1, start_date, end_date)
+# Fetch historical data for TSLA, H1 timeframe, for September 2025
+rates = mt5.copy_rates_range("TSLA", mt5.TIMEFRAME_H1, start_date, end_date)
 if rates is None or len(rates) == 0:
-    print("Failed to fetch historical data for September 2025")
+    print("Failed to fetch historical data for TSLA for September 2025")
     mt5.shutdown()
     exit()
 
@@ -38,13 +38,13 @@ signal_data = pd.DataFrame({
 })
 
 # Save signals to CSV
-output_file = "C:\\\\Users\\Pablo\\AppData\\Roaming\\MetaQuotes\\Tester\\D0E8209F77C8CF37AD8BF550E51FF075\\Agent-127.0.0.1-3000\\MQL5\\Files\\signals.csv"
+output_file = "C:\\Users\\Pablo\\AppData\\Roaming\\MetaQuotes\\Tester\\D0E8209F77C8CF37AD8BF550E51FF075\\Agent-127.0.0.1-3000\\MQL5\\Files\\signals.csv"
 output_file2 = "./signals.csv.back"
 
 signal_data.to_csv(output_file, mode="w", index=False, header=True)
 signal_data.to_csv(output_file2, mode="w", index=False, header=True)
 
-print(f"Generated 30 random trade signals and saved to {output_file}")
+print(f"Generated 30 random trade signals for TSLA and saved to {output_file}")
 
 # Shutdown MT5 connection
 mt5.shutdown()
