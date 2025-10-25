@@ -14,17 +14,35 @@ start_date = datetime(2025, 10, 1)
 end_date = datetime(2025, 10, 23, 23, 59, 59)
 
 # Fetch historical data for TSLA, M1 timeframe
-rates = mt5.copy_rates_range("TSLA", mt5.TIMEFRAME_M1, start_date, end_date)
-if rates is None or len(rates) == 0:
-    print("Failed to fetch historical data for TSLA for October 2025")
+rates_m1_tsla = mt5.copy_rates_range("TSLA", mt5.TIMEFRAME_M1, start_date, end_date)
+if rates_m1_tsla is None or len(rates_m1_tsla) == 0:
+    print("Failed to fetch 1-minute historical data for TSLA for October 2025")
     mt5.shutdown()
     exit()
 
-# Create DataFrame
-df = pd.DataFrame(rates)
-df['time'] = pd.to_datetime(df['time'], unit='s')
+# Fetch historical data for TSLA, M5 timeframe
+rates_m5_tsla = mt5.copy_rates_range("TSLA", mt5.TIMEFRAME_M5, start_date, end_date)
+if rates_m5_tsla is None or len(rates_m5_tsla) == 0:
+    print("Failed to fetch 5-minute historical data for TSLA for October 2025")
+    mt5.shutdown()
+    exit()
 
-# Calculate RSI (14-period)
+# Fetch historical data for NDXUSD, M1 timeframe
+rates_m1_ndx = mt5.copy_rates_range("NDXUSD", mt5.TIMEFRAME_M1, start_date, end_date)
+if rates_m1_ndx is None or len(rates_m1_ndx) == 0:
+    print("Failed to fetch 1-minute historical data for NDXUSD for October 2025")
+    mt5.shutdown()
+    exit()
+
+# Create DataFrames
+df_m1_tsla = pd.DataFrame(rates_m1_tsla)
+df_m1_tsla['time'] = pd.to_datetime(df_m1_tsla['time'], unit='s')
+df_m5_tsla = pd.DataFrame(rates_m5_tsla)
+df_m5_tsla['time'] = pd.to_datetime(df_m5_tsla['time'], unit='s')
+df_m1_ndx = pd.DataFrame(rates_m1_ndx)
+df_m1_ndx['time'] = pd.to_datetime(df_m1_ndx['time'], unit='s')
+
+# Calculate RSI (14-period) for all data
 def calculate_rsi(data, periods=14):
     delta = data['close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=periods).mean()
@@ -33,9 +51,11 @@ def calculate_rsi(data, periods=14):
     rsi = 100 - (100 / (1 + rs))
     return rsi
 
-df['rsi'] = calculate_rsi(df)
+df_m1_tsla['rsi'] = calculate_rsi(df_m1_tsla)
+df_m5_tsla['rsi'] = calculate_rsi(df_m5_tsla)
+df_m1_ndx['rsi'] = calculate_rsi(df_m1_ndx)
 
-# Calculate Stochastic Oscillator (14, 3, 3)
+# Calculate Stochastic Oscillator (14, 3, 3) for TSLA M1
 def calculate_stochastic(df, k_period=14, d_period=3, smooth=3):
     df['lowest_low'] = df['low'].rolling(window=k_period).min()
     df['highest_high'] = df['high'].rolling(window=k_period).max()
@@ -44,18 +64,37 @@ def calculate_stochastic(df, k_period=14, d_period=3, smooth=3):
     df['%D'] = df['%K_smooth'].rolling(window=d_period).mean()
     return df
 
-df = calculate_stochastic(df)
+df_m1_tsla = calculate_stochastic(df_m1_tsla)
 
-# Generate BUY signals (RSI < 30) with rule: no new BUY until previous SELL
-signal_list = []  # Renamed for clarity
-potential_buys = df[df['rsi'] < 30][['time', '%K_smooth']].copy()
+# Align 5-minute TSLA RSI and 1-minute NDXUSD RSI with 1-minute TSLA data
+df_m1_tsla = df_m1_tsla.merge(
+    df_m5_tsla[['time', 'rsi']].rename(columns={'rsi': 'rsi_m5'}),
+    left_on='time',
+    right_on='time',
+    how='left'
+).merge(
+    df_m1_ndx[['time', 'rsi']].rename(columns={'rsi': 'rsi_ndx'}),
+    left_on='time',
+    right_on='time',
+    how='left'
+)
+# Forward-fill to align data
+df_m1_tsla['rsi_m5'] = df_m1_tsla['rsi_m5'].ffill()
+df_m1_tsla['rsi_ndx'] = df_m1_tsla['rsi_ndx'].ffill()
+
+# Generate BUY signals (RSI M1 TSLA < 30, RSI M5 TSLA < 35, RSI M1 NDXUSD < 30) with rule: no new BUY until previous SELL
+signal_list = []
+potential_buys = df_m1_tsla[
+    (df_m1_tsla['rsi'] < 30) & 
+    (df_m1_tsla['rsi_m5'] < 35) & 
+    (df_m1_tsla['rsi_ndx'] < 30)
+][['time', '%K_smooth']].copy()
 potential_buys['signal'] = 'BUY'
 last_sell_time = start_date - timedelta(minutes=1)  # Initialize to allow first BUY
 
 for idx, buy in potential_buys.iterrows():
     buy_time = buy['time']
     if buy_time > last_sell_time:  # Only allow BUY if after last SELL
-        # Convert Series to dict for consistency
         buy_dict = {'time': buy_time, 'signal': 'BUY', '%K_smooth': buy['%K_smooth']}
         signal_list.append(buy_dict)
         
@@ -64,7 +103,7 @@ for idx, buy in potential_buys.iterrows():
         if cutoff_time < buy_time:
             cutoff_time += timedelta(days=1)
         
-        sell_window = df[(df['time'] > buy_time) & (df['time'] <= cutoff_time)]
+        sell_window = df_m1_tsla[(df_m1_tsla['time'] > buy_time) & (df_m1_tsla['time'] <= cutoff_time)]
         sell_candidates = sell_window[sell_window['%K_smooth'] > 80]
         
         if not sell_candidates.empty:
@@ -72,16 +111,13 @@ for idx, buy in potential_buys.iterrows():
             sell_k = sell_candidates.iloc[0]['%K_smooth']
         else:
             sell_time = cutoff_time
-            # Find the closest data point <= sell_time for %K
-            closest_mask = df['time'] <= sell_time
+            closest_mask = df_m1_tsla['time'] <= sell_time
             if closest_mask.any():
-                closest_data = df[closest_mask].iloc[-1]
+                closest_data = df_m1_tsla[closest_mask].iloc[-1]
                 sell_k = closest_data['%K_smooth']
             else:
-                # Fallback if no data available (rare)
                 sell_k = np.nan
         
-        # Append SELL as dict
         sell_dict = {'time': sell_time, 'signal': 'SELL', '%K_smooth': sell_k}
         signal_list.append(sell_dict)
         
@@ -92,8 +128,8 @@ signal_data = pd.DataFrame(signal_list)
 signal_data['timestamp'] = signal_data['time'].dt.strftime("%Y-%m-%d %H:%M:%S")
 
 # Filter out SELL signals outside the data range
-max_time = df['time'].max()
-signal_data['time_check'] = pd.to_datetime(signal_data['timestamp'])  # Temporary column for filtering
+max_time = df_m1_tsla['time'].max()
+signal_data['time_check'] = pd.to_datetime(signal_data['timestamp'], format="%Y-%m-%d %H:%M:%S")
 signal_data = signal_data[signal_data['time_check'] <= max_time]
 signal_data = signal_data[['timestamp', 'signal', '%K_smooth']].rename(columns={'%K_smooth': '%K'})
 
@@ -104,7 +140,7 @@ output_file2 = "./signals.csv.back"
 signal_data.to_csv(output_file, mode="w", index=False, header=True)
 signal_data.to_csv(output_file2, mode="w", index=False, header=True)
 
-print(f"Generated {len(signal_data[signal_data['signal'] == 'BUY'])} BUY signals (RSI < 30) with corresponding SELL signals (%K > 80 or at 19:00) and saved to {output_file}")
+print(f"Generated {len(signal_data[signal_data['signal'] == 'BUY'])} BUY signals (RSI M1 TSLA < 30, RSI M5 TSLA < 35, RSI M1 NDXUSD < 30) with corresponding SELL signals (%K > 80 or at 19:00) and saved to {output_file}")
 
 # Shutdown MT5 connection
 mt5.shutdown()
