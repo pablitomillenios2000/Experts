@@ -43,6 +43,13 @@ if rates_m1_tsla is None or len(rates_m1_tsla) == 0:
 df_m1_tsla = pd.DataFrame(rates_m1_tsla)
 df_m1_tsla['time'] = pd.to_datetime(df_m1_tsla['time'], unit='s')
 
+# Filter for trading hours (13:31 to 19:59)
+df_m1_tsla['time_of_day'] = df_m1_tsla['time'].dt.time
+df_m1_tsla = df_m1_tsla[
+    (df_m1_tsla['time_of_day'] >= pd.to_datetime('13:31:00').time()) & 
+    (df_m1_tsla['time_of_day'] <= pd.to_datetime('19:59:00').time())
+]
+
 # Read CSV files
 try:
     # Read 1-minute RSI for TSLA
@@ -117,11 +124,10 @@ for idx, buy in potential_buys.iterrows():
         }
         signal_list.append(buy_dict)
         
-        # Find corresponding SELL signal
-        cutoff_time = buy_time.replace(hour=19, minute=0, second=0, microsecond=0)
-        if cutoff_time < buy_time:
-            cutoff_time += timedelta(days=1)
+        # Define the end of the trading window (19:59 on the same day)
+        cutoff_time = buy_time.replace(hour=19, minute=59, second=0, microsecond=0)
         
+        # Find corresponding SELL signal within the trading window
         sell_window = df_m1_tsla[(df_m1_tsla['time'] > buy_time) & (df_m1_tsla['time'] <= cutoff_time)]
         sell_candidates = sell_window[sell_window['%K_smooth'] > 80]
         
@@ -133,6 +139,7 @@ for idx, buy in potential_buys.iterrows():
             sell_rsi_m5 = sell_row['rsi_m5']
             sell_rsi_ndx = sell_row['rsi_ndx']
         else:
+            # Force SELL at 19:59 to avoid holding overnight
             sell_time = cutoff_time
             closest_mask = df_m1_tsla['time'] <= sell_time
             if closest_mask.any():
@@ -190,7 +197,7 @@ signal_data.to_csv(output_file, mode="w", index=False, header=True)
 signal_data.to_csv(output_file2, mode="w", index=False, header=True)
 signal_data_tv.to_csv(output_file_tv, mode="w", index=False, header=True)
 
-print(f"Generated {len(signal_data[signal_data['signal'] == 'BUY'])} BUY signals (RSI M1 TSLA < 30, RSI M5 TSLA < 35, RSI M1 NDXUSD < 30) with corresponding SELL signals (%K > 80 or at 19:00) and saved to {output_file} and {output_file_tv} with selected columns: {selected_columns}")
+print(f"Generated {len(signal_data[signal_data['signal'] == 'BUY'])} BUY signals (RSI M1 TSLA < 30, RSI M5 TSLA < 35, RSI M1 NDXUSD < 30) with corresponding SELL signals (%K > 80 or at 19:59) within 13:31-19:59 trading hours and saved to {output_file} and {output_file_tv} with selected columns: {selected_columns}")
 
 # Shutdown MT5 connection
 mt5.shutdown()
