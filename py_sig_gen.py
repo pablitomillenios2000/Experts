@@ -10,8 +10,8 @@ if not mt5.initialize():
     exit()
 
 # Define the time range for October 2025
-start_date = datetime(2025, 10, 1)
-end_date = datetime(2025, 10, 23, 23, 59, 59)
+start_date = datetime(2025, 9, 1)
+end_date = datetime(2025, 9, 30, 23, 59, 59)
 
 # Fetch historical data for TSLA, M1 timeframe
 rates_m1_tsla = mt5.copy_rates_range("TSLA", mt5.TIMEFRAME_M1, start_date, end_date)
@@ -131,7 +131,7 @@ signal_data['timestamp'] = signal_data['time'].dt.strftime("%Y-%m-%d %H:%M:%S")
 max_time = df_m1_tsla['time'].max()
 signal_data['time_check'] = pd.to_datetime(signal_data['timestamp'], format="%Y-%m-%d %H:%M:%S")
 signal_data = signal_data[signal_data['time_check'] <= max_time]
-signal_data = signal_data[['timestamp', 'signal', '%K_smooth']].rename(columns={'%K_smooth': '%K'})
+signal_data = signal_data[['timestamp', 'signal']]  # Exclude %K_smooth from output
 
 # Save signals to CSV
 output_file = "C:\\Users\\Pablo\\AppData\\Roaming\\MetaQuotes\\Tester\\D0E8209F77C8CF37AD8BF550E51FF075\\Agent-127.0.0.1-3000\\MQL5\\Files\\signals.csv"
