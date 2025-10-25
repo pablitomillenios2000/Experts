@@ -110,7 +110,7 @@ void OnTick() {
 
    if (now >= signals[currentIndex].time) {
       CTrade trade;
-      double lotSize = 0.01; // Small lot size for testing; adjust as needed
+      double lotSize = 27; // Small lot size for testing; adjust as needed
       ENUM_ORDER_TYPE orderType = (signals[currentIndex].type == "BUY") ? ORDER_TYPE_BUY : ORDER_TYPE_SELL;
 
       // Capture the exact market timestamp at the moment of trade attempt
