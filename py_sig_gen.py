@@ -38,8 +38,11 @@ signal_data = pd.DataFrame({
 })
 
 # Save signals to CSV
-output_file = "signals.csv"
+output_file = "C:\\\\Users\\Pablo\\AppData\\Roaming\\MetaQuotes\\Tester\\D0E8209F77C8CF37AD8BF550E51FF075\\Agent-127.0.0.1-3000\\MQL5\\Files\\signals.csv"
+output_file2 = "./signals.csv.back"
+
 signal_data.to_csv(output_file, mode="w", index=False, header=True)
+signal_data.to_csv(output_file2, mode="w", index=False, header=True)
 
 print(f"Generated 30 random trade signals and saved to {output_file}")
 
