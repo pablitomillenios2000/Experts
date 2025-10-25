@@ -13,6 +13,10 @@ In Trading View regular NVDA trading hours are between
 to convert from TV to MT5 add +3.5 hours
 
 
+SOLUTION: Set TV to UTC
+The servers are in UTC (Noctorial)
+
+
 =================
 
 ## Timeline:
