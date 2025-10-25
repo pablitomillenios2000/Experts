@@ -3,6 +3,14 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 
+# Toggle variables for output columns
+output_columns_toggle = {
+    'rsi': False,        # Toggle for RSI M1 TSLA
+    'rsi_m5': False,     # Toggle for RSI M5 TSLA
+    'rsi_ndx': False,    # Toggle for RSI M1 NDXUSD
+    '%K_smooth': False   # Toggle for Stochastic %K_smooth
+}
+
 # Initialize MT5 connection
 if not mt5.initialize():
     print("MT5 initialize() failed")
@@ -159,10 +167,15 @@ signal_data['timestamp'] = signal_data['time'].dt.strftime("%Y-%m-%d %H:%M:%S")
 max_time = df_m1_tsla['time'].max()
 signal_data['time_check'] = pd.to_datetime(signal_data['timestamp'], format="%Y-%m-%d %H:%M:%S")
 signal_data = signal_data[signal_data['time_check'] <= max_time]
-signal_data = signal_data[['timestamp', 'signal', 'rsi', 'rsi_m5', 'rsi_ndx', '%K_smooth']]  # Include RSI and %K_smooth
+
+# Select columns based on toggles
+base_columns = ['timestamp', 'signal']
+optional_columns = ['rsi', 'rsi_m5', 'rsi_ndx', '%K_smooth']
+selected_columns = base_columns + [col for col in optional_columns if output_columns_toggle.get(col, False)]
+signal_data = signal_data[selected_columns]
 
 # Create DataFrame for tv.csv with timestamps adjusted by -3.5 hours
-signal_data_tv = signal_data[['timestamp', 'signal', 'rsi', 'rsi_m5', 'rsi_ndx', '%K_smooth']].copy()
+signal_data_tv = signal_data.copy()
 signal_data_tv['timestamp'] = (
     pd.to_datetime(signal_data_tv['timestamp'], format="%Y-%m-%d %H:%M:%S") - timedelta(hours=3.5)
 ).dt.strftime("%Y-%m-%d %H:%M:%S")
@@ -177,7 +190,7 @@ signal_data.to_csv(output_file, mode="w", index=False, header=True)
 signal_data.to_csv(output_file2, mode="w", index=False, header=True)
 signal_data_tv.to_csv(output_file_tv, mode="w", index=False, header=True)
 
-print(f"Generated {len(signal_data[signal_data['signal'] == 'BUY'])} BUY signals (RSI M1 TSLA < 30, RSI M5 TSLA < 35, RSI M1 NDXUSD < 30) with corresponding SELL signals (%K > 80 or at 19:00) and saved to {output_file} and {output_file_tv} with RSI and %K_smooth values")
+print(f"Generated {len(signal_data[signal_data['signal'] == 'BUY'])} BUY signals (RSI M1 TSLA < 30, RSI M5 TSLA < 35, RSI M1 NDXUSD < 30) with corresponding SELL signals (%K > 80 or at 19:00) and saved to {output_file} and {output_file_tv} with selected columns: {selected_columns}")
 
 # Shutdown MT5 connection
 mt5.shutdown()
