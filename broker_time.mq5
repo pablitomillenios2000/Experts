@@ -15,13 +15,21 @@ void OnStart()
 //--- Get the current server time
    datetime serverTime = TimeCurrent();
    
-//--- Convert to string for display
+//--- Get the GMT time and calculate timezone offset in hours
+   datetime gmtTime = TimeGMT();
+   int timezoneOffset = (int)((serverTime - gmtTime) / 3600);
+   string timezoneStr = StringFormat("GMT%+d", timezoneOffset);
+   
+//--- Convert time to string for display
    string timeString = TimeToString(serverTime, TIME_DATE|TIME_MINUTES|TIME_SECONDS);
    
-//--- Show broker's server time
-   Comment("Broker Server Time: ", timeString);
+//--- Combine time and timezone for display
+   string displayString = StringFormat("Broker Server Time: %s %s", timeString, timezoneStr);
+   
+//--- Show broker's server time with timezone
+   Comment(displayString);
    
 //--- Print to Experts log as well
-   Print("Current Broker Server Time: ", timeString);
+   Print(displayString);
   }
 //+------------------------------------------------------------------+

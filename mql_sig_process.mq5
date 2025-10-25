@@ -113,11 +113,19 @@ void OnTick() {
       double lotSize = 0.01; // Small lot size for testing; adjust as needed
       ENUM_ORDER_TYPE orderType = (signals[currentIndex].type == "BUY") ? ORDER_TYPE_BUY : ORDER_TYPE_SELL;
 
+      // Capture the exact market timestamp at the moment of trade attempt
+      datetime tradeTime = TimeCurrent();
+      
       // Open position (assuming hedging mode; if netting, you may need to close previous)
       if (trade.PositionOpen(_Symbol, orderType, lotSize, 0, 0, 0)) {
-         Print("Opened ", signals[currentIndex].type, " at ", TimeToString(signals[currentIndex].time));
+         Print("Opened ", signals[currentIndex].type, " at signal time ", 
+               TimeToString(signals[currentIndex].time), 
+               ", market time ", TimeToString(tradeTime));
       } else {
-         Print("Failed to open ", signals[currentIndex].type, " Error: ", trade.ResultRetcode());
+         Print("Failed to open ", signals[currentIndex].type, 
+               " at signal time ", TimeToString(signals[currentIndex].time), 
+               ", market time ", TimeToString(tradeTime), 
+               ", Error: ", trade.ResultRetcode());
       }
 
       currentIndex++;
