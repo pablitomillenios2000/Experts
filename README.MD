@@ -8,3 +8,6 @@ The trades timestamps have to fall between those hours
 
 In Trading View regular NVDA trading hours are between
 9:30 and 16:00 Mo-Fr
+
+
+to convert from TV to MT5 add +3.5 hours
