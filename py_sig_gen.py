@@ -15,6 +15,10 @@ rsi5tesla_file = "5mrsitesla.csv"
 stochtesla_file = "1mstochtsla.csv"
 rsi1ndqusd_file = "1mrsindxusd.csv"
 
+rsi1teslainput = terminal_prefix + rsi1tesla_file
+rsi5teslainput = terminal_prefix + rsi5tesla_file
+stochteslainput = terminal_prefix + stochtesla_file 
+rsi1ndqusdinput = terminal_prefix + rsi1ndqusd_file
 
 # Define the time range for October 2025
 start_date = datetime(2025, 9, 1)
