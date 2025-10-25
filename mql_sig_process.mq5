@@ -118,7 +118,7 @@ void OnTick() {
    // Check if the current bar's time has reached or passed the signal's time
    if (currentBarTime >= signals[currentIndex].time) {
       CTrade trade;
-      double lotSize = 27; // Adjusted for backtesting; modify as needed
+      double lotSize = 30; // Adjusted for backtesting; modify as needed
       ENUM_ORDER_TYPE orderType = (signals[currentIndex].type == "BUY") ? ORDER_TYPE_BUY : ORDER_TYPE_SELL;
 
       // Use signal price if provided, otherwise use market price
