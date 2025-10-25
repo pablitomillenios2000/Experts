@@ -1,5 +1,7 @@
 ![alt text](./img/image.png)
 
+[Modus Operandi](./Funktionsweise.MD)
+
 Trading Hours in Noctorial for TSLA (Nasdaq) are
 Between 
 13:30 and 19:59 Mo-Fr
