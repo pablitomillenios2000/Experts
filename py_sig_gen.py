@@ -10,8 +10,8 @@ if not mt5.initialize():
     exit()
 
 # Define the time range for October 2025
-start_date = datetime(2025, 10, 1)
-end_date = datetime(2025, 10, 23, 23, 59, 59)
+start_date = datetime(2025, 9, 1)
+end_date = datetime(2025, 9, 30, 23, 59, 59)
 
 # Fetch historical data for TSLA, M1 timeframe
 rates_m1_tsla = mt5.copy_rates_range("TSLA", mt5.TIMEFRAME_M1, start_date, end_date)
