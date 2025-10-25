@@ -88,14 +88,21 @@ potential_buys = df_m1_tsla[
     (df_m1_tsla['rsi'] < 30) & 
     (df_m1_tsla['rsi_m5'] < 35) & 
     (df_m1_tsla['rsi_ndx'] < 30)
-][['time', '%K_smooth']].copy()
+][['time', 'rsi', 'rsi_m5', 'rsi_ndx', '%K_smooth']].copy()
 potential_buys['signal'] = 'BUY'
 last_sell_time = start_date - timedelta(minutes=1)  # Initialize to allow first BUY
 
 for idx, buy in potential_buys.iterrows():
     buy_time = buy['time']
     if buy_time > last_sell_time:  # Only allow BUY if after last SELL
-        buy_dict = {'time': buy_time, 'signal': 'BUY', '%K_smooth': buy['%K_smooth']}
+        buy_dict = {
+            'time': buy_time,
+            'signal': 'BUY',
+            'rsi': buy['rsi'],
+            'rsi_m5': buy['rsi_m5'],
+            'rsi_ndx': buy['rsi_ndx'],
+            '%K_smooth': buy['%K_smooth']
+        }
         signal_list.append(buy_dict)
         
         # Find corresponding SELL signal
@@ -107,18 +114,35 @@ for idx, buy in potential_buys.iterrows():
         sell_candidates = sell_window[sell_window['%K_smooth'] > 80]
         
         if not sell_candidates.empty:
-            sell_time = sell_candidates.iloc[0]['time']
-            sell_k = sell_candidates.iloc[0]['%K_smooth']
+            sell_row = sell_candidates.iloc[0]
+            sell_time = sell_row['time']
+            sell_k = sell_row['%K_smooth']
+            sell_rsi = sell_row['rsi']
+            sell_rsi_m5 = sell_row['rsi_m5']
+            sell_rsi_ndx = sell_row['rsi_ndx']
         else:
             sell_time = cutoff_time
             closest_mask = df_m1_tsla['time'] <= sell_time
             if closest_mask.any():
                 closest_data = df_m1_tsla[closest_mask].iloc[-1]
                 sell_k = closest_data['%K_smooth']
+                sell_rsi = closest_data['rsi']
+                sell_rsi_m5 = closest_data['rsi_m5']
+                sell_rsi_ndx = closest_data['rsi_ndx']
             else:
                 sell_k = np.nan
+                sell_rsi = np.nan
+                sell_rsi_m5 = np.nan
+                sell_rsi_ndx = np.nan
         
-        sell_dict = {'time': sell_time, 'signal': 'SELL', '%K_smooth': sell_k}
+        sell_dict = {
+            'time': sell_time,
+            'signal': 'SELL',
+            'rsi': sell_rsi,
+            'rsi_m5': sell_rsi_m5,
+            'rsi_ndx': sell_rsi_ndx,
+            '%K_smooth': sell_k
+        }
         signal_list.append(sell_dict)
         
         last_sell_time = sell_time  # Update last SELL time to block new BUYs
@@ -131,10 +155,10 @@ signal_data['timestamp'] = signal_data['time'].dt.strftime("%Y-%m-%d %H:%M:%S")
 max_time = df_m1_tsla['time'].max()
 signal_data['time_check'] = pd.to_datetime(signal_data['timestamp'], format="%Y-%m-%d %H:%M:%S")
 signal_data = signal_data[signal_data['time_check'] <= max_time]
-signal_data = signal_data[['timestamp', 'signal']]  # Exclude %K_smooth from output
+signal_data = signal_data[['timestamp', 'signal', 'rsi', 'rsi_m5', 'rsi_ndx', '%K_smooth']]  # Include RSI and %K_smooth
 
 # Create DataFrame for tv.csv with timestamps adjusted by -3.5 hours
-signal_data_tv = signal_data[['timestamp', 'signal']].copy()
+signal_data_tv = signal_data[['timestamp', 'signal', 'rsi', 'rsi_m5', 'rsi_ndx', '%K_smooth']].copy()
 signal_data_tv['timestamp'] = (
     pd.to_datetime(signal_data_tv['timestamp'], format="%Y-%m-%d %H:%M:%S") - timedelta(hours=3.5)
 ).dt.strftime("%Y-%m-%d %H:%M:%S")
@@ -148,7 +172,7 @@ signal_data.to_csv(output_file, mode="w", index=False, header=True)
 signal_data.to_csv(output_file2, mode="w", index=False, header=True)
 signal_data_tv.to_csv(output_file_tv, mode="w", index=False, header=True)
 
-print(f"Generated {len(signal_data[signal_data['signal'] == 'BUY'])} BUY signals (RSI M1 TSLA < 30, RSI M5 TSLA < 35, RSI M1 NDXUSD < 30) with corresponding SELL signals (%K > 80 or at 19:00) and saved to {output_file} and {output_file_tv}")
+print(f"Generated {len(signal_data[signal_data['signal'] == 'BUY'])} BUY signals (RSI M1 TSLA < 30, RSI M5 TSLA < 35, RSI M1 NDXUSD < 30) with corresponding SELL signals (%K > 80 or at 19:00) and saved to {output_file} and {output_file_tv} with RSI and %K_smooth values")
 
 # Shutdown MT5 connection
 mt5.shutdown()
