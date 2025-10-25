@@ -11,3 +11,20 @@ In Trading View regular NVDA trading hours are between
 
 
 to convert from TV to MT5 add +3.5 hours
+
+
+=================
+
+Timeline:
+
+1) Create a simple algo that buys at rsi <30 and sells at stochastic K>80
+2) Compare the time points in TV and MT5
+
+3) Backtest the algo
+4) If it works complete the algo without Levels
+
+5) Backtest
+6) If it works create a realtime signal generator
+7) Add a realtime signal consume
+
+8) Add a short-trader
