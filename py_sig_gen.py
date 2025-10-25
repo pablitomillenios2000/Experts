@@ -10,8 +10,8 @@ if not mt5.initialize():
     exit()
 
 # Define the time range for October 2025
-start_date = datetime(2025, 9, 1)
-end_date = datetime(2025, 9, 30, 23, 59, 59)
+start_date = datetime(2025, 10, 1)
+end_date = datetime(2025, 10, 23, 23, 59, 59)
 
 # Fetch historical data for TSLA, M1 timeframe
 rates_m1_tsla = mt5.copy_rates_range("TSLA", mt5.TIMEFRAME_M1, start_date, end_date)
@@ -133,14 +133,22 @@ signal_data['time_check'] = pd.to_datetime(signal_data['timestamp'], format="%Y-
 signal_data = signal_data[signal_data['time_check'] <= max_time]
 signal_data = signal_data[['timestamp', 'signal']]  # Exclude %K_smooth from output
 
+# Create DataFrame for tv.csv with timestamps adjusted by -3.5 hours
+signal_data_tv = signal_data[['timestamp', 'signal']].copy()
+signal_data_tv['timestamp'] = (
+    pd.to_datetime(signal_data_tv['timestamp'], format="%Y-%m-%d %H:%M:%S") - timedelta(hours=3.5)
+).dt.strftime("%Y-%m-%d %H:%M:%S")
+
 # Save signals to CSV
 output_file = "C:\\Users\\Pablo\\AppData\\Roaming\\MetaQuotes\\Tester\\D0E8209F77C8CF37AD8BF550E51FF075\\Agent-127.0.0.1-3000\\MQL5\\Files\\signals.csv"
 output_file2 = "./signals.csv.back"
+output_file_tv = "./tv.csv"
 
 signal_data.to_csv(output_file, mode="w", index=False, header=True)
 signal_data.to_csv(output_file2, mode="w", index=False, header=True)
+signal_data_tv.to_csv(output_file_tv, mode="w", index=False, header=True)
 
-print(f"Generated {len(signal_data[signal_data['signal'] == 'BUY'])} BUY signals (RSI M1 TSLA < 30, RSI M5 TSLA < 35, RSI M1 NDXUSD < 30) with corresponding SELL signals (%K > 80 or at 19:00) and saved to {output_file}")
+print(f"Generated {len(signal_data[signal_data['signal'] == 'BUY'])} BUY signals (RSI M1 TSLA < 30, RSI M5 TSLA < 35, RSI M1 NDXUSD < 30) with corresponding SELL signals (%K > 80 or at 19:00) and saved to {output_file} and {output_file_tv}")
 
 # Shutdown MT5 connection
 mt5.shutdown()
