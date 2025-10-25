@@ -35,30 +35,67 @@ def calculate_rsi(data, periods=14):
 
 df['rsi'] = calculate_rsi(df)
 
-# Identify BUY signals (RSI < 30)
-buy_signals = df[df['rsi'] < 30][['time']].copy()
-buy_signals['signal'] = 'BUY'
+# Calculate Stochastic Oscillator (14, 3, 3)
+def calculate_stochastic(df, k_period=14, d_period=3, smooth=3):
+    df['lowest_low'] = df['low'].rolling(window=k_period).min()
+    df['highest_high'] = df['high'].rolling(window=k_period).max()
+    df['%K'] = 100 * (df['close'] - df['lowest_low']) / (df['highest_high'] - df['lowest_low'])
+    df['%K_smooth'] = df['%K'].rolling(window=smooth).mean()
+    df['%D'] = df['%K_smooth'].rolling(window=d_period).mean()
+    return df
 
-# Create corresponding SELL signals (1 hour after each BUY)
-sell_signals = buy_signals.copy()
-sell_signals['time'] = sell_signals['time'] + timedelta(hours=1)
-sell_signals['signal'] = 'SELL'
+df = calculate_stochastic(df)
 
-# Pair BUY and SELL signals to maintain order
-paired_signals = []
-for i in range(len(buy_signals)):
-    paired_signals.append(buy_signals.iloc[i:i+1][['time', 'signal']])
-    paired_signals.append(sell_signals.iloc[i:i+1][['time', 'signal']])
+# Generate BUY signals (RSI < 30) with rule: no new BUY until previous SELL
+signal_list = []  # Renamed for clarity
+potential_buys = df[df['rsi'] < 30][['time', '%K_smooth']].copy()
+potential_buys['signal'] = 'BUY'
+last_sell_time = start_date - timedelta(minutes=1)  # Initialize to allow first BUY
 
-# Combine paired signals into a single DataFrame
-signal_data = pd.concat(paired_signals).reset_index(drop=True)
+for idx, buy in potential_buys.iterrows():
+    buy_time = buy['time']
+    if buy_time > last_sell_time:  # Only allow BUY if after last SELL
+        # Convert Series to dict for consistency
+        buy_dict = {'time': buy_time, 'signal': 'BUY', '%K_smooth': buy['%K_smooth']}
+        signal_list.append(buy_dict)
+        
+        # Find corresponding SELL signal
+        cutoff_time = buy_time.replace(hour=19, minute=0, second=0, microsecond=0)
+        if cutoff_time < buy_time:
+            cutoff_time += timedelta(days=1)
+        
+        sell_window = df[(df['time'] > buy_time) & (df['time'] <= cutoff_time)]
+        sell_candidates = sell_window[sell_window['%K_smooth'] > 80]
+        
+        if not sell_candidates.empty:
+            sell_time = sell_candidates.iloc[0]['time']
+            sell_k = sell_candidates.iloc[0]['%K_smooth']
+        else:
+            sell_time = cutoff_time
+            # Find the closest data point <= sell_time for %K
+            closest_mask = df['time'] <= sell_time
+            if closest_mask.any():
+                closest_data = df[closest_mask].iloc[-1]
+                sell_k = closest_data['%K_smooth']
+            else:
+                # Fallback if no data available (rare)
+                sell_k = np.nan
+        
+        # Append SELL as dict
+        sell_dict = {'time': sell_time, 'signal': 'SELL', '%K_smooth': sell_k}
+        signal_list.append(sell_dict)
+        
+        last_sell_time = sell_time  # Update last SELL time to block new BUYs
+
+# Convert to DataFrame
+signal_data = pd.DataFrame(signal_list)
 signal_data['timestamp'] = signal_data['time'].dt.strftime("%Y-%m-%d %H:%M:%S")
 
-# Filter out SELL signals that fall outside the available data range
+# Filter out SELL signals outside the data range
 max_time = df['time'].max()
-signal_data['time'] = pd.to_datetime(signal_data['timestamp'])
-signal_data = signal_data[signal_data['time'] <= max_time]
-signal_data = signal_data[['timestamp', 'signal']]  # Keep only required columns
+signal_data['time_check'] = pd.to_datetime(signal_data['timestamp'])  # Temporary column for filtering
+signal_data = signal_data[signal_data['time_check'] <= max_time]
+signal_data = signal_data[['timestamp', 'signal', '%K_smooth']].rename(columns={'%K_smooth': '%K'})
 
 # Save signals to CSV
 output_file = "C:\\Users\\Pablo\\AppData\\Roaming\\MetaQuotes\\Tester\\D0E8209F77C8CF37AD8BF550E51FF075\\Agent-127.0.0.1-3000\\MQL5\\Files\\signals.csv"
@@ -67,7 +104,7 @@ output_file2 = "./signals.csv.back"
 signal_data.to_csv(output_file, mode="w", index=False, header=True)
 signal_data.to_csv(output_file2, mode="w", index=False, header=True)
 
-print(f"Generated {len(buy_signals)} BUY signals (RSI < 30) with corresponding SELL signals 1 hour later and saved to {output_file}")
+print(f"Generated {len(signal_data[signal_data['signal'] == 'BUY'])} BUY signals (RSI < 30) with corresponding SELL signals (%K > 80 or at 19:00) and saved to {output_file}")
 
 # Shutdown MT5 connection
 mt5.shutdown()
