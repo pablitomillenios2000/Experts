@@ -9,6 +9,13 @@ if not mt5.initialize():
     mt5.shutdown()
     exit()
 
+terminal_prefix = "C:\\Users\\Pablo\\AppData\\Roaming\\MetaQuotes\\Terminal\\D0E8209F77C8CF37AD8BF550E51FF075\\MQL5\\Files"
+rsi1tesla_file = "1mrsitesla.csv"
+rsi5tesla_file = "5mrsitesla.csv"
+stochtesla_file = "1mstochtsla.csv"
+rsi1ndqusd_file = "1mrsindxusd.csv"
+
+
 # Define the time range for October 2025
 start_date = datetime(2025, 9, 1)
 end_date = datetime(2025, 9, 30, 23, 59, 59)
@@ -164,7 +171,8 @@ signal_data_tv['timestamp'] = (
 ).dt.strftime("%Y-%m-%d %H:%M:%S")
 
 # Save signals to CSV
-output_file = "C:\\Users\\Pablo\\AppData\\Roaming\\MetaQuotes\\Tester\\D0E8209F77C8CF37AD8BF550E51FF075\\Agent-127.0.0.1-3000\\MQL5\\Files\\signals.csv"
+tester_prefix = "C:\\Users\\Pablo\\AppData\\Roaming\\MetaQuotes\\Tester\\D0E8209F77C8CF37AD8BF550E51FF075\\Agent-127.0.0.1-3000\\MQL5\\Files\\"
+output_file = tester_prefix + "signals.csv"
 output_file2 = "./signals.csv.back"
 output_file_tv = "./tv.csv"
 
