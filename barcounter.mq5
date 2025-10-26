@@ -1,15 +1,15 @@
 //+------------------------------------------------------------------+
-//|                                     HelloWorldLastTenBars.mq5     |
+//|                                     NumberLastTenBars.mq5         |
 //|                        Copyright 2025, xAI                       |
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2025, xAI"
 #property link      ""
 #property version   "1.00"
 #property strict
-#property description "EA that prints 'he' above the last 10 bars."
+#property description "EA that numbers the last 10 bars from left to right (1 for most recent)."
 
 // Input parameters
-input double LabelOffset = 1000.0; // Offset above high in points
+input double LabelOffset = 10; // Offset above high in points
 input color LabelColor = clrRed;   // Label color
 input int FontSize = 10;           // Font size
 
@@ -19,7 +19,7 @@ input int FontSize = 10;           // Font size
 int OnInit()
 {
    Print("EA Initialized on ", _Symbol, " Timeframe: ", Period());
-   PlaceHeLabels();
+   PlaceNumberLabels();
    return(INIT_SUCCEEDED);
 }
 
@@ -43,15 +43,15 @@ void OnTick()
    if(currentBarTime != lastBarTime)
    {
       lastBarTime = currentBarTime;
-      PlaceHeLabels();
+      PlaceNumberLabels();
       Print("New bar detected: ", TimeToString(currentBarTime));
    }
 }
 
 //+------------------------------------------------------------------+
-//| Place "he" above the last 10 bars                                |
+//| Place numbers above the last 10 bars (1 for most recent)         |
 //+------------------------------------------------------------------+
-void PlaceHeLabels()
+void PlaceNumberLabels()
 {
    // Get last 10 bars' high and time
    double highArray[];
@@ -69,20 +69,21 @@ void PlaceHeLabels()
    // Delete previous labels
    DeleteAllLabels();
    
-   // Place "he" above each of the last 10 bars
+   // Place numbers above each of the last 10 bars (1 for most recent)
    for(int i = 0; i < barsToCopy; i++)
    {
-      string name = "HeLabel_" + IntegerToString(i);
+      string name = "NumberLabel_" + IntegerToString(i);
       double price = highArray[i] + LabelOffset * _Point;
       datetime time = timeArray[i];
+      int number = i + 1; // 1 for i=0 (most recent), 2 for i=1, etc.
       
       if(ObjectCreate(ChartID(), name, OBJ_TEXT, 0, time, price))
       {
-         ObjectSetString(ChartID(), name, OBJPROP_TEXT, "he");
+         ObjectSetString(ChartID(), name, OBJPROP_TEXT, IntegerToString(number));
          ObjectSetInteger(ChartID(), name, OBJPROP_COLOR, LabelColor);
          ObjectSetInteger(ChartID(), name, OBJPROP_FONTSIZE, FontSize);
          ObjectSetInteger(ChartID(), name, OBJPROP_ANCHOR, ANCHOR_LOWER);
-         Print("Placed 'he' above bar ", i, " at ", TimeToString(time));
+         Print("Placed number ", number, " above bar ", i, " at ", TimeToString(time));
       }
       else
       {
@@ -101,7 +102,7 @@ void DeleteAllLabels()
    for(int obj = ObjectsTotal(ChartID(), 0, OBJ_TEXT) - 1; obj >= 0; obj--)
    {
       string name = ObjectName(ChartID(), obj);
-      if(StringFind(name, "HeLabelਮLabel_") == 0)
+      if(StringFind(name, "NumberLabel_") == 0)
       {
          ObjectDelete(ChartID(), name);
       }
