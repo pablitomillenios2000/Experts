@@ -103,6 +103,7 @@ int OnInit() {
 void OnDeinit(const int reason) {
    // Clean up all objects created by the EA
    ObjectsDeleteAll(0, "Signal_");
+   ObjectsDeleteAll(0, "SL_");
 }
 
 //+------------------------------------------------------------------+
@@ -120,12 +121,67 @@ bool IsBuyPositionOpen() {
 }
 
 //+------------------------------------------------------------------+
+//| Check for stop-loss trigger and graph it                         |
+//+------------------------------------------------------------------+
+bool CheckAndGraphStopLoss() {
+   static ulong lastPositionTicket = 0;
+   static bool positionWasOpen = false;
+   static bool slGraphed = false; // Track if SL was graphed for the current trade
+
+   // Update position status
+   bool isPositionOpen = IsBuyPositionOpen();
+   if (isPositionOpen && PositionSelect(_Symbol)) {
+      lastPositionTicket = PositionGetInteger(POSITION_TICKET);
+      positionWasOpen = true;
+      slGraphed = false; // Reset for new position
+   }
+
+   // Check if a BUY position was closed (likely by SL)
+   if (positionWasOpen && !isPositionOpen && !slGraphed) {
+      if (HistorySelect(TimeCurrent() - 3600, TimeCurrent())) { // Check last hour for recent deals
+         for (int i = HistoryDealsTotal() - 1; i >= 0; i--) {
+            ulong dealTicket = HistoryDealGetTicket(i);
+            if (dealTicket > 0 && HistoryDealGetString(dealTicket, DEAL_SYMBOL) == _Symbol) {
+               if (HistoryDealGetInteger(dealTicket, DEAL_TYPE) == DEAL_TYPE_SELL &&
+                   HistoryDealGetInteger(dealTicket, DEAL_REASON) == DEAL_REASON_SL) {
+                  double closePrice = HistoryDealGetDouble(dealTicket, DEAL_PRICE);
+                  datetime closeTime = (datetime)HistoryDealGetInteger(dealTicket, DEAL_TIME);
+                  
+                  // Create a chart object for SL trigger
+                  string objName = "SL_Trigger_" + IntegerToString(dealTicket);
+                  if (!ObjectCreate(0, objName, OBJ_ARROW, 0, closeTime, closePrice)) {
+                     Print("Failed to create SL trigger object, Error: ", GetLastError());
+                  } else {
+                     ObjectSetInteger(0, objName, OBJPROP_COLOR, clrYellow);
+                     ObjectSetInteger(0, objName, OBJPROP_STYLE, STYLE_SOLID);
+                     ObjectSetInteger(0, objName, OBJPROP_WIDTH, 5);
+                     ObjectSetInteger(0, objName, OBJPROP_ARROWCODE, 159); // Circle symbol
+                     ObjectSetInteger(0, objName, OBJPROP_ANCHOR, ANCHOR_CENTER);
+                     ObjectSetDouble(0, objName, OBJPROP_SCALE, 2.0);
+                     Print("SL triggered at ", DoubleToString(closePrice, _Digits), " on ", TimeToString(closeTime));
+                  }
+                  slGraphed = true; // Mark SL as graphed
+                  positionWasOpen = false; // Reset position status
+                  return true; // SL was graphed
+               }
+            }
+         }
+      }
+   }
+
+   return false; // No SL triggered
+}
+
+//+------------------------------------------------------------------+
 //| Expert tick function                                             |
 //+------------------------------------------------------------------+
 void OnTick() {
    static int currentIndex = 0;
    // Use the current bar's open time for backtesting
    datetime currentBarTime = iTime(_Symbol, PERIOD_CURRENT, 0);
+
+   // Check for SL triggers
+   CheckAndGraphStopLoss();
 
    if (currentIndex >= signalCount) return;
 
@@ -162,7 +218,7 @@ void OnTick() {
                   Print("Failed to add SL to BUY, Error: ", trade.ResultRetcode());
                }
 
-               // Add a larger circle on the chart using entry price
+               // Add a green circle for BUY entry
                string objName = "Signal_" + IntegerToString(currentIndex) + "_" + TimeToString(signals[currentIndex].time, TIME_DATE|TIME_MINUTES);
                color clr = clrGreen;
 
@@ -172,7 +228,7 @@ void OnTick() {
                   ObjectSetInteger(0, objName, OBJPROP_COLOR, clr);
                   ObjectSetInteger(0, objName, OBJPROP_STYLE, STYLE_SOLID);
                   ObjectSetInteger(0, objName, OBJPROP_WIDTH, 5);
-                  ObjectSetInteger(0, objName, OBJPROP_ARROWCODE, 159);
+                  ObjectSetInteger(0, objName, OBJPROP_ARROWCODE, 159); // Circle symbol
                   ObjectSetInteger(0, objName, OBJPROP_ANCHOR, ANCHOR_CENTER);
                   ObjectSetDouble(0, objName, OBJPROP_SCALE, 2.0);
                }
@@ -187,8 +243,9 @@ void OnTick() {
          }
          currentIndex++;
       } else if (signalType == "SELL") {
-         // Check if there is an open buy position
-         if (IsBuyPositionOpen()) {
+         // Check if there is an open buy position and SL has not been graphed
+         static bool slGraphed = false;
+         if (!slGraphed && IsBuyPositionOpen()) {
             ENUM_ORDER_TYPE orderType = ORDER_TYPE_SELL;
 
             // Open sell to close the buy
@@ -197,12 +254,8 @@ void OnTick() {
                      ", bar time ", TimeToString(currentBarTime), 
                      ", requested price ", DoubleToString(signalPrice, _Digits));
 
-               // Add a larger circle on the chart (using signal price or market)
-               double exitPrice = signalPrice; // Fallback to signal price
-               if (PositionSelect(_Symbol)) {
-                  exitPrice = PositionGetDouble(POSITION_PRICE_CURRENT);
-               }
-
+               // Add a red circle for SELL
+               double exitPrice = signalPrice; // Use signal price for graphing
                string objName = "Signal_" + IntegerToString(currentIndex) + "_" + TimeToString(signals[currentIndex].time, TIME_DATE|TIME_MINUTES);
                color clr = clrRed;
 
@@ -212,7 +265,7 @@ void OnTick() {
                   ObjectSetInteger(0, objName, OBJPROP_COLOR, clr);
                   ObjectSetInteger(0, objName, OBJPROP_STYLE, STYLE_SOLID);
                   ObjectSetInteger(0, objName, OBJPROP_WIDTH, 5);
-                  ObjectSetInteger(0, objName, OBJPROP_ARROWCODE, 159);
+                  ObjectSetInteger(0, objName, OBJPROP_ARROWCODE, 159); // Circle symbol
                   ObjectSetInteger(0, objName, OBJPROP_ANCHOR, ANCHOR_CENTER);
                   ObjectSetDouble(0, objName, OBJPROP_SCALE, 2.0);
                }
@@ -224,7 +277,7 @@ void OnTick() {
             }
          } else {
             Print("Skipping SELL at signal time ", TimeToString(signals[currentIndex].time), 
-                  " because no open BUY position (SL likely triggered)");
+                  " because no open BUY position or SL already triggered");
          }
          currentIndex++;
       }
