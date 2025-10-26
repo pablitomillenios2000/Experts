@@ -1,17 +1,27 @@
 //+------------------------------------------------------------------+
-//|                                     NumberLastTenBars.mq5         |
+//|                                   MarkLocalMaxima.mq5            |
 //|                        Copyright 2025, xAI                       |
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2025, xAI"
-#property link      ""
 #property version   "1.00"
 #property strict
-#property description "EA that numbers the last 10 bars from left to right (1 for most recent)."
+#property description "Places a yellow 'X' label 5 pixels above bars matching datetimes in local_maxima.csv."
 
 // Input parameters
-input double LabelOffset = 10; // Offset above high in points
-input color LabelColor = clrRed;   // Label color
-input int FontSize = 10;           // Font size
+input string FileName = "local_maxima.csv";  // CSV file in MQL5/Files/
+input color  LabelColor = clrYellow;         // Label color
+input int    FontSize = 12;                  // Font size
+input int    PixelOffset = 5;                // Offset in pixels above the bar
+
+// Structure to store local maxima data
+struct LocalMax
+{
+   datetime time;
+   double   price;
+};
+
+// Array to hold maxima
+LocalMax maxima[];
 
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
@@ -19,7 +29,13 @@ input int FontSize = 10;           // Font size
 int OnInit()
 {
    Print("EA Initialized on ", _Symbol, " Timeframe: ", Period());
-   PlaceNumberLabels();
+   if(!LoadLocalMaxima(FileName))
+   {
+      Print("Error loading local maxima from file: ", FileName);
+      return(INIT_FAILED);
+   }
+   
+   PlaceLabels();
    return(INIT_SUCCEEDED);
 }
 
@@ -37,74 +53,91 @@ void OnDeinit(const int reason)
 //+------------------------------------------------------------------+
 void OnTick()
 {
-   // Update labels on new bar
-   static datetime lastBarTime = 0;
-   datetime currentBarTime = iTime(_Symbol, _Period, 0);
-   if(currentBarTime != lastBarTime)
-   {
-      lastBarTime = currentBarTime;
-      PlaceNumberLabels();
-      Print("New bar detected: ", TimeToString(currentBarTime));
-   }
+   // Do nothing — labels are static
 }
 
 //+------------------------------------------------------------------+
-//| Place numbers above the last 10 bars (1 for most recent)         |
+//| Load local maxima from CSV                                       |
 //+------------------------------------------------------------------+
-void PlaceNumberLabels()
+bool LoadLocalMaxima(string filename)
 {
-   // Get last 10 bars' high and time
-   double highArray[];
-   datetime timeArray[];
-   ArraySetAsSeries(highArray, true);
-   ArraySetAsSeries(timeArray, true);
-   int barsToCopy = 10;
-   if(CopyHigh(_Symbol, _Period, 0, barsToCopy, highArray) < barsToCopy || 
-      CopyTime(_Symbol, _Period, 0, barsToCopy, timeArray) < barsToCopy)
+   ResetLastError();
+   int file = FileOpen(filename, FILE_READ|FILE_CSV|FILE_ANSI, ',');
+   if(file == INVALID_HANDLE)
    {
-      Print("Error: Failed to copy data for last 10 bars");
-      return;
+      Print("Failed to open file: ", filename, " Error: ", GetLastError());
+      return false;
    }
-   
-   // Delete previous labels
-   DeleteAllLabels();
-   
-   // Place numbers above each of the last 10 bars (1 for most recent)
-   for(int i = 0; i < barsToCopy; i++)
+
+   // Skip header
+   string header = FileReadString(file);
+   FileReadString(file);
+
+   // Read each line
+   while(!FileIsEnding(file))
    {
-      string name = "NumberLabel_" + IntegerToString(i);
-      double price = highArray[i] + LabelOffset * _Point;
-      datetime time = timeArray[i];
-      int number = i + 1; // 1 for i=0 (most recent), 2 for i=1, etc.
-      
+      string date_str = FileReadString(file);
+      string price_str = FileReadString(file);
+      if(date_str == "" || price_str == "") break;
+
+      datetime dt = StringToTime(date_str);
+      double price = StringToDouble(price_str);
+
+      if(dt > 0 && price > 0)
+      {
+         LocalMax m;
+         m.time = dt;
+         m.price = price;
+         ArrayResize(maxima, ArraySize(maxima) + 1);
+         maxima[ArraySize(maxima) - 1] = m;
+      }
+   }
+
+   FileClose(file);
+   Print("Loaded ", ArraySize(maxima), " local maxima from ", filename);
+   return ArraySize(maxima) > 0;
+}
+
+//+------------------------------------------------------------------+
+//| Place 'X' labels for local maxima                                |
+//+------------------------------------------------------------------+
+void PlaceLabels()
+{
+   DeleteAllLabels();
+
+   for(int i = 0; i < ArraySize(maxima); i++)
+   {
+      string name = "MaxLabel_" + IntegerToString(i);
+      double price = maxima[i].price;
+      datetime time = maxima[i].time;
+
       if(ObjectCreate(ChartID(), name, OBJ_TEXT, 0, time, price))
       {
-         ObjectSetString(ChartID(), name, OBJPROP_TEXT, IntegerToString(number));
+         ObjectSetString(ChartID(), name, OBJPROP_TEXT, "X");
          ObjectSetInteger(ChartID(), name, OBJPROP_COLOR, LabelColor);
          ObjectSetInteger(ChartID(), name, OBJPROP_FONTSIZE, FontSize);
          ObjectSetInteger(ChartID(), name, OBJPROP_ANCHOR, ANCHOR_LOWER);
-         Print("Placed number ", number, " above bar ", i, " at ", TimeToString(time));
+         ObjectSetInteger(ChartID(), name, OBJPROP_YDISTANCE, PixelOffset);
+         Print("Placed 'X' at ", TimeToString(time), " price ", DoubleToString(price, _Digits));
       }
       else
       {
-         Print("Failed to create label for bar ", i, ", Error: ", GetLastError());
+         Print("Failed to create label for ", TimeToString(time), " Error: ", GetLastError());
       }
    }
-   
+
    ChartRedraw();
 }
 
 //+------------------------------------------------------------------+
-//| Delete all labels                                                |
+//| Delete all 'X' labels                                            |
 //+------------------------------------------------------------------+
 void DeleteAllLabels()
 {
-   for(int obj = ObjectsTotal(ChartID(), 0, OBJ_TEXT) - 1; obj >= 0; obj--)
+   for(int i = ObjectsTotal(ChartID(), 0, OBJ_TEXT) - 1; i >= 0; i--)
    {
-      string name = ObjectName(ChartID(), obj);
-      if(StringFind(name, "NumberLabel_") == 0)
-      {
+      string name = ObjectName(ChartID(), i);
+      if(StringFind(name, "MaxLabel_") == 0)
          ObjectDelete(ChartID(), name);
-      }
    }
 }
