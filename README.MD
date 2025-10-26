@@ -1,6 +1,7 @@
 ![alt text](./img/image.png)
 
 [Modus Operandi](./Funktionsweise.MD)
+[Soportes](./Soportes.md)
 
 Trading Hours in Noctorial for TSLA (Nasdaq) are
 Between 
