@@ -2,6 +2,7 @@ import MetaTrader5 as mt5
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
+from scipy.signal import argrelextrema
 
 # Toggle variables for output columns
 output_columns_toggle = {
@@ -29,8 +30,8 @@ stochteslainput = terminal_prefix + stochtesla_file
 rsi1ndqusdinput = terminal_prefix + rsi1ndqusd_file
 
 # Define the time range for October 2025
-start_date = datetime(2025, 8, 1)
-end_date = datetime(2025, 8, 30, 23, 59, 59)
+start_date = datetime(2025, 9, 1)
+end_date = datetime(2025, 9, 30, 23, 59, 59)
 
 # Fetch historical data for TSLA, M1 timeframe
 rates_m1_tsla = mt5.copy_rates_range("TSLA", mt5.TIMEFRAME_M1, start_date, end_date)
@@ -43,11 +44,11 @@ if rates_m1_tsla is None or len(rates_m1_tsla) == 0:
 df_m1_tsla = pd.DataFrame(rates_m1_tsla)
 df_m1_tsla['time'] = pd.to_datetime(df_m1_tsla['time'], unit='s')
 
-# Filter for trading hours (13:31 to 19:30) - CHANGED FROM 19:59
+# Filter for trading hours (13:31 to 19:30)
 df_m1_tsla['time_of_day'] = df_m1_tsla['time'].dt.time
 df_m1_tsla = df_m1_tsla[
     (df_m1_tsla['time_of_day'] >= pd.to_datetime('13:31:00').time()) & 
-    (df_m1_tsla['time_of_day'] <= pd.to_datetime('19:30:00').time())  # Updated to 19:30
+    (df_m1_tsla['time_of_day'] <= pd.to_datetime('19:30:00').time())
 ]
 
 # Read CSV files
@@ -101,12 +102,16 @@ df_m1_tsla['rsi_m5'] = df_m1_tsla['rsi_m5'].ffill()
 df_m1_tsla['%K_smooth'] = df_m1_tsla['%K_smooth'].ffill()
 df_m1_tsla['rsi_ndx'] = df_m1_tsla['rsi_ndx'].ffill()
 
-# Generate BUY signals (RSI M1 TSLA < 30, RSI M5 TSLA < 35, RSI M1 NDXUSD < 30) with rule: no new BUY until previous SELL
+# Identify local minima in closing prices with a 5-point window
+local_min_indices = argrelextrema(df_m1_tsla['close'].values, np.less, order=8)[0]
+
+# Generate BUY signals (RSI M1 TSLA < 30, RSI M5 TSLA < 35, RSI M1 NDXUSD < 30, local minimum) with rule: no new BUY until previous SELL
 signal_list = []
 potential_buys = df_m1_tsla[
     (df_m1_tsla['rsi'] < 30) & 
     (df_m1_tsla['rsi_m5'] < 35) & 
-    (df_m1_tsla['rsi_ndx'] < 30)
+    (df_m1_tsla['rsi_ndx'] < 30) &
+    (df_m1_tsla.index.isin(local_min_indices))
 ][['time', 'rsi', 'rsi_m5', 'rsi_ndx', '%K_smooth']].copy()
 potential_buys['signal'] = 'BUY'
 last_sell_time = start_date - timedelta(minutes=1)  # Initialize to allow first BUY
@@ -124,7 +129,7 @@ for idx, buy in potential_buys.iterrows():
         }
         signal_list.append(buy_dict)
         
-        # Define the end of the trading window (19:30 on the same day) - CHANGED FROM 19:59
+        # Define the end of the trading window (19:30 on the same day)
         cutoff_time = buy_time.replace(hour=19, minute=30, second=0, microsecond=0)
     
         # Find corresponding SELL signal within the trading window
@@ -139,7 +144,7 @@ for idx, buy in potential_buys.iterrows():
             sell_rsi_m5 = sell_row['rsi_m5']
             sell_rsi_ndx = sell_row['rsi_ndx']
         else:
-            # Force SELL at 19:30 to avoid holding after cutoff - CHANGED FROM 19:59
+            # Force SELL at 19:30 to avoid holding after cutoff
             sell_time = cutoff_time
             closest_mask = df_m1_tsla['time'] <= sell_time
             if closest_mask.any():
@@ -197,7 +202,7 @@ signal_data.to_csv(output_file, mode="w", index=False, header=True)
 signal_data.to_csv(output_file2, mode="w", index=False, header=True)
 signal_data_tv.to_csv(output_file_tv, mode="w", index=False, header=True)
 
-print(f"Generated {len(signal_data[signal_data['signal'] == 'BUY'])} BUY signals (RSI M1 TSLA < 30, RSI M5 TSLA < 35, RSI M1 NDXUSD < 30) with corresponding SELL signals (%K > 80 or at 19:30) within 13:31-19:30 trading hours and saved to {output_file} and {output_file_tv} with selected columns: {selected_columns}")
+print(f"Generated {len(signal_data[signal_data['signal'] == 'BUY'])} BUY signals (RSI M1 TSLA < 30, RSI M5 TSLA < 35, RSI M1 NDXUSD < 30, local minimum within 5 points) with corresponding SELL signals (%K > 80 or at 19:30) within 13:31-19:30 trading hours and saved to {output_file} and {output_file_tv} with selected columns: {selected_columns}")
 
 # Shutdown MT5 connection
 mt5.shutdown()
