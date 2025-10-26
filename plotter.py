@@ -24,22 +24,22 @@ df['Timestamp'] = pd.to_datetime(df['Timestamp'], format='%Y.%m.%d %H:%M:%S')
 # Set Timestamp as the index
 df.set_index('Timestamp', inplace=True)
 
-# Rename 'TickVolume' to 'Volume' for mplfinance compatibility
-df = df.rename(columns={'TickVolume': 'Volume'})
+# Define the end time for the candles
+end_time = pd.to_datetime('2025.09.30 19:30:00', format='%Y.%m.%d %H:%M:%S')
 
-# Select the last 10 candles
-last_10_candles = df.tail(10)
+# Select the last 10 candles ending at end_time
+last_10_candles = df[df.index <= end_time].tail(10)
 
 # Check if there are enough candles
 if len(last_10_candles) < 1:
-    print("Error: Not enough data to plot.")
+    print(f"Error: No data available up to {end_time}.")
     exit(1)
+elif len(last_10_candles) < 10:
+    print(f"Warning: Only {len(last_10_candles)} candles available up to {end_time}.")
 
-# Plot the candlestick chart
+# Plot the candlestick chart without volume
 mpf.plot(last_10_candles, 
          type='candle', 
-         title='NVDA Last 10 Candles (1-Minute)', 
+         title='NVDA Last 10 Candles (1-Minute) Ending 2025.09.30 19:30', 
          style='yahoo', 
-         ylabel='Price (USD)', 
-         volume=True, 
-         ylabel_lower='Volume (Tick)')
+         ylabel='Price (USD)')
