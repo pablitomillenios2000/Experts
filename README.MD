@@ -41,3 +41,5 @@ The servers are in UTC (Noctorial)
 2) RSI 14 , 1m Oversold < 30
 3) Stoch-K > 80
 4) IXIC =>, 1m RSI14 Oversold <30
+
+5) Extension de la ema 45
