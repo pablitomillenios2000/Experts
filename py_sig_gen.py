@@ -8,7 +8,7 @@ output_columns_toggle = {
     'rsi': False,        # Toggle for RSI M1 TSLA
     'rsi_m5': False,     # Toggle for RSI M5 TSLA
     'rsi_ndx': False,    # Toggle for RSI M1 NDXUSD
-    '%K_smooth': False   # Toggle for Stochastic %K_smooth
+    '%K_smooth': True    # Toggle for Stochastic %K_smooth
 }
 
 # Initialize MT5 connection
@@ -29,8 +29,8 @@ stochteslainput = terminal_prefix + stochtesla_file
 rsi1ndqusdinput = terminal_prefix + rsi1ndqusd_file
 
 # Define the time range for October 2025
-start_date = datetime(2025, 9, 1)
-end_date = datetime(2025, 9, 30, 23, 59, 59)
+start_date = datetime(2025, 8, 1)
+end_date = datetime(2025, 8, 30, 23, 59, 59)
 
 # Fetch historical data for TSLA, M1 timeframe
 rates_m1_tsla = mt5.copy_rates_range("TSLA", mt5.TIMEFRAME_M1, start_date, end_date)
@@ -43,11 +43,11 @@ if rates_m1_tsla is None or len(rates_m1_tsla) == 0:
 df_m1_tsla = pd.DataFrame(rates_m1_tsla)
 df_m1_tsla['time'] = pd.to_datetime(df_m1_tsla['time'], unit='s')
 
-# Filter for trading hours (13:31 to 19:59)
+# Filter for trading hours (13:31 to 19:30) - CHANGED FROM 19:59
 df_m1_tsla['time_of_day'] = df_m1_tsla['time'].dt.time
 df_m1_tsla = df_m1_tsla[
     (df_m1_tsla['time_of_day'] >= pd.to_datetime('13:31:00').time()) & 
-    (df_m1_tsla['time_of_day'] <= pd.to_datetime('19:59:00').time())
+    (df_m1_tsla['time_of_day'] <= pd.to_datetime('19:30:00').time())  # Updated to 19:30
 ]
 
 # Read CSV files
@@ -124,9 +124,9 @@ for idx, buy in potential_buys.iterrows():
         }
         signal_list.append(buy_dict)
         
-        # Define the end of the trading window (19:59 on the same day)
-        cutoff_time = buy_time.replace(hour=19, minute=59, second=0, microsecond=0)
-        
+        # Define the end of the trading window (19:30 on the same day) - CHANGED FROM 19:59
+        cutoff_time = buy_time.replace(hour=19, minute=30, second=0, microsecond=0)
+    
         # Find corresponding SELL signal within the trading window
         sell_window = df_m1_tsla[(df_m1_tsla['time'] > buy_time) & (df_m1_tsla['time'] <= cutoff_time)]
         sell_candidates = sell_window[sell_window['%K_smooth'] > 80]
@@ -139,7 +139,7 @@ for idx, buy in potential_buys.iterrows():
             sell_rsi_m5 = sell_row['rsi_m5']
             sell_rsi_ndx = sell_row['rsi_ndx']
         else:
-            # Force SELL at 19:59 to avoid holding overnight
+            # Force SELL at 19:30 to avoid holding after cutoff - CHANGED FROM 19:59
             sell_time = cutoff_time
             closest_mask = df_m1_tsla['time'] <= sell_time
             if closest_mask.any():
@@ -197,7 +197,7 @@ signal_data.to_csv(output_file, mode="w", index=False, header=True)
 signal_data.to_csv(output_file2, mode="w", index=False, header=True)
 signal_data_tv.to_csv(output_file_tv, mode="w", index=False, header=True)
 
-print(f"Generated {len(signal_data[signal_data['signal'] == 'BUY'])} BUY signals (RSI M1 TSLA < 30, RSI M5 TSLA < 35, RSI M1 NDXUSD < 30) with corresponding SELL signals (%K > 80 or at 19:59) within 13:31-19:59 trading hours and saved to {output_file} and {output_file_tv} with selected columns: {selected_columns}")
+print(f"Generated {len(signal_data[signal_data['signal'] == 'BUY'])} BUY signals (RSI M1 TSLA < 30, RSI M5 TSLA < 35, RSI M1 NDXUSD < 30) with corresponding SELL signals (%K > 80 or at 19:30) within 13:31-19:30 trading hours and saved to {output_file} and {output_file_tv} with selected columns: {selected_columns}")
 
 # Shutdown MT5 connection
 mt5.shutdown()
