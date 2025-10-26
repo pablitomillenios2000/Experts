@@ -11,6 +11,7 @@ void OnStart()
     // Define symbols and timeframes
     string symbol_tsla = "TSLA";
     string symbol_ndx = "QQQ"; //invesco QQQ Trust as proxy for NDXUSD
+    string symbol_nvda = "NVDA";
     ENUM_TIMEFRAMES tf_m1 = PERIOD_M1;
     ENUM_TIMEFRAMES tf_m5 = PERIOD_M5;
 
@@ -110,10 +111,28 @@ void OnStart()
     }
     WriteToCsv("1mstochtsla.csv", times, values, bars);
 
+    // 5. 1-minute OHLC data for TSLA -> tesla_1m.csv
+    MqlRates rates_tsla[];
+    bars = CopyRates(symbol_tsla, tf_m1, start_time, end_time, rates_tsla);
+    if (bars <= 0) {
+        Print("No bars copied for TSLA M1 OHLC");
+        return;
+    }
+    WriteRatesToCsv("tesla_1m.csv", rates_tsla, bars);
+
+    // 6. 1-minute OHLC data for NVDA -> nvda_1m.csv
+    MqlRates rates_nvda[];
+    bars = CopyRates(symbol_nvda, tf_m1, start_time, end_time, rates_nvda);
+    if (bars <= 0) {
+        Print("No bars copied for NVDA M1 OHLC");
+        return;
+    }
+    WriteRatesToCsv("nvda_1m.csv", rates_nvda, bars);
+
     Print("Script completed successfully.");
 }
 
-// Function to write to CSV
+// Function to write to CSV (for single value indicators)
 void WriteToCsv(string filename, datetime &times[], double &values[], int count)
 {
     int file_handle = FileOpen(filename, FILE_WRITE | FILE_CSV | FILE_ANSI, ',');
@@ -129,6 +148,35 @@ void WriteToCsv(string filename, datetime &times[], double &values[], int count)
     for (int i = 0; i < count; i++) {
         string timestamp = TimeToString(times[i], TIME_DATE | TIME_MINUTES | TIME_SECONDS);
         FileWrite(file_handle, timestamp, DoubleToString(values[i], 2));
+    }
+
+    FileClose(file_handle);
+    Print("Wrote ", count, " lines to ", filename);
+}
+
+// Function to write rates to CSV (for OHLC data)
+void WriteRatesToCsv(string filename, MqlRates &rates[], int count)
+{
+    int file_handle = FileOpen(filename, FILE_WRITE | FILE_CSV | FILE_ANSI, ',');
+    if (file_handle == INVALID_HANDLE) {
+        Print("Failed to open file: ", filename);
+        return;
+    }
+
+    // Write header
+    FileWrite(file_handle, "Timestamp", "Open", "High", "Low", "Close", "TickVolume", "Spread", "RealVolume");
+
+    // Write data
+    for (int i = 0; i < count; i++) {
+        string timestamp = TimeToString(rates[i].time, TIME_DATE | TIME_MINUTES | TIME_SECONDS);
+        FileWrite(file_handle, timestamp, 
+                  DoubleToString(rates[i].open, 2), 
+                  DoubleToString(rates[i].high, 2), 
+                  DoubleToString(rates[i].low, 2), 
+                  DoubleToString(rates[i].close, 2), 
+                  rates[i].tick_volume, 
+                  rates[i].spread, 
+                  rates[i].real_volume);
     }
 
     FileClose(file_handle);
