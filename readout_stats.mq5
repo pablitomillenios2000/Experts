@@ -15,7 +15,7 @@ void OnStart()
     ENUM_TIMEFRAMES tf_m5 = PERIOD_M5;
 
     // Define date range: September 2025
-    datetime start_time = StringToTime("2024.01.01 00:00:00");
+    datetime start_time = StringToTime("2024.10.15 00:00:00");
     datetime end_time = StringToTime("2025.10.30 23:59:59");
 
     // Common RSI period (default 14)
