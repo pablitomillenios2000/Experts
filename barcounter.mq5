@@ -1,12 +1,12 @@
 //+------------------------------------------------------------------+
-//|                                     HelloWorldLastBar.mq5         |
+//|                                     HelloWorldLastTenBars.mq5     |
 //|                        Copyright 2025, xAI                       |
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2025, xAI"
 #property link      ""
 #property version   "1.00"
 #property strict
-#property description "EA that prints 'Hello World' above the last bar."
+#property description "EA that prints 'he' above the last 10 bars."
 
 // Input parameters
 input double LabelOffset = 1000.0; // Offset above high in points
@@ -19,7 +19,7 @@ input int FontSize = 10;           // Font size
 int OnInit()
 {
    Print("EA Initialized on ", _Symbol, " Timeframe: ", Period());
-   PlaceHelloWorldLabel();
+   PlaceHeLabels();
    return(INIT_SUCCEEDED);
 }
 
@@ -28,7 +28,7 @@ int OnInit()
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
 {
-   ObjectDelete(ChartID(), "HelloWorldLabel");
+   DeleteAllLabels();
    Print("EA Deinitialized, reason: ", reason);
 }
 
@@ -37,52 +37,73 @@ void OnDeinit(const int reason)
 //+------------------------------------------------------------------+
 void OnTick()
 {
-   // Update label on new bar
+   // Update labels on new bar
    static datetime lastBarTime = 0;
    datetime currentBarTime = iTime(_Symbol, _Period, 0);
    if(currentBarTime != lastBarTime)
    {
       lastBarTime = currentBarTime;
-      PlaceHelloWorldLabel();
+      PlaceHeLabels();
       Print("New bar detected: ", TimeToString(currentBarTime));
    }
 }
 
 //+------------------------------------------------------------------+
-//| Place "Hello World" above the last bar                           |
+//| Place "he" above the last 10 bars                                |
 //+------------------------------------------------------------------+
-void PlaceHelloWorldLabel()
+void PlaceHeLabels()
 {
-   // Get last bar's high and time
+   // Get last 10 bars' high and time
    double highArray[];
    datetime timeArray[];
    ArraySetAsSeries(highArray, true);
    ArraySetAsSeries(timeArray, true);
-   if(CopyHigh(_Symbol, _Period, 0, 1, highArray) < 1 || CopyTime(_Symbol, _Period, 0, 1, timeArray) < 1)
+   int barsToCopy = 10;
+   if(CopyHigh(_Symbol, _Period, 0, barsToCopy, highArray) < barsToCopy || 
+      CopyTime(_Symbol, _Period, 0, barsToCopy, timeArray) < barsToCopy)
    {
-      Print("Error: Failed to copy data for last bar");
+      Print("Error: Failed to copy data for last 10 bars");
       return;
    }
    
-   // Delete previous label
-   ObjectDelete(ChartID(), "HelloWorldLabel");
+   // Delete previous labels
+   DeleteAllLabels();
    
-   // Place new label
-   double price = highArray[0] + LabelOffset * _Point;
-   datetime time = timeArray[0];
-   
-   if(ObjectCreate(ChartID(), "HelloWorldLabel", OBJ_TEXT, 0, time, price))
+   // Place "he" above each of the last 10 bars
+   for(int i = 0; i < barsToCopy; i++)
    {
-      ObjectSetString(ChartID(), "HelloWorldLabel", OBJPROP_TEXT, "Hello World");
-      ObjectSetInteger(ChartID(), "HelloWorldLabel", OBJPROP_COLOR, LabelColor);
-      ObjectSetInteger(ChartID(), "HelloWorldLabel", OBJPROP_FONTSIZE, FontSize);
-      ObjectSetInteger(ChartID(), "HelloWorldLabel", OBJPROP_ANCHOR, ANCHOR_LOWER);
-      Print("Placed 'Hello World' above bar at ", TimeToString(time));
-   }
-   else
-   {
-      Print("Failed to create label, Error: ", GetLastError());
+      string name = "HeLabel_" + IntegerToString(i);
+      double price = highArray[i] + LabelOffset * _Point;
+      datetime time = timeArray[i];
+      
+      if(ObjectCreate(ChartID(), name, OBJ_TEXT, 0, time, price))
+      {
+         ObjectSetString(ChartID(), name, OBJPROP_TEXT, "he");
+         ObjectSetInteger(ChartID(), name, OBJPROP_COLOR, LabelColor);
+         ObjectSetInteger(ChartID(), name, OBJPROP_FONTSIZE, FontSize);
+         ObjectSetInteger(ChartID(), name, OBJPROP_ANCHOR, ANCHOR_LOWER);
+         Print("Placed 'he' above bar ", i, " at ", TimeToString(time));
+      }
+      else
+      {
+         Print("Failed to create label for bar ", i, ", Error: ", GetLastError());
+      }
    }
    
    ChartRedraw();
+}
+
+//+------------------------------------------------------------------+
+//| Delete all labels                                                |
+//+------------------------------------------------------------------+
+void DeleteAllLabels()
+{
+   for(int obj = ObjectsTotal(ChartID(), 0, OBJ_TEXT) - 1; obj >= 0; obj--)
+   {
+      string name = ObjectName(ChartID(), obj);
+      if(StringFind(name, "HeLabelਮLabel_") == 0)
+      {
+         ObjectDelete(ChartID(), name);
+      }
+   }
 }
