@@ -43,3 +43,5 @@ The servers are in UTC (Noctorial)
 4) IXIC =>, 1m RSI14 Oversold <30
 
 5) Extension de la ema 45
+6) Stop_Loss logic
+7! 2 package split
