@@ -8,7 +8,7 @@ terminal_prefix = "C:\\Users\\Pablo\\AppData\\Roaming\\MetaQuotes\\Terminal\\D0E
 file_path = os.path.join(terminal_prefix, "nvda_1m.csv")
 
 # Output file path
-output_path = "C:\\Users\\Pablo\\AppData\\Roaming\\MetaQuotes\\Tester\\D0E8209F77C8CF37AD8BF550E51FF075\\Agent-127.0.0.1-3000\\MQL5\\Files\\local_maxima.csv"
+output_path = "C:\\Users\\Pablo\\AppData\\Roaming\\MetaQuotes\\Terminal\\D0E8209F77C8CF37AD8BF550E51FF075\\MQL5\\Files\\local_maxima.csv"
 
 # Read the input CSV
 df = pd.read_csv(file_path)
