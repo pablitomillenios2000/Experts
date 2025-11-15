@@ -1,0 +1,25 @@
+//@version=5
+indicator("Dynamic Horizontal Offset Line", overlay = true)
+
+// ───────────── INPUTS ─────────────
+offsetPct = input.float(0.00495, "Offset Percentage", step = 0.0001)
+lineColor  = input.color(color.rgb(255, 0, 255), "Line Color")  // literal magenta
+lineWidth = input.int(3, "Line Width", minval = 1)
+
+// ───────────── CALCULATIONS ─────────────
+offsetLevel = close * (1 - offsetPct)
+
+// ───────────── LINE CREATION ─────────────
+// Create the line once
+var line dynLine = line.new(     bar_index, offsetLevel,     bar_index + 1, offsetLevel,     extend = extend.right,     color = lineColor,     width = lineWidth)
+
+// ───────────── UPDATE LINE EACH BAR ─────────────
+line.set_y1(dynLine, offsetLevel)
+line.set_y2(dynLine, offsetLevel)
+
+line.set_x1(dynLine, bar_index - 1000)
+line.set_x2(dynLine, bar_index + 10)
+
+// Update color/width live if user changes settings
+line.set_color(dynLine, lineColor)
+line.set_width(dynLine, lineWidth)
