@@ -2,8 +2,8 @@
 indicator("Dynamic Offset Line (Manual Purchase Price)", overlay = true)
 
 // ─────────── INPUTS ───────────
-offsetPct     = input.float(0.00495, "Offset % (0.00495 = 0.495%)", step = 0.00001)
 purchasePrice = input.float(0.0, "Purchase Price (Any value < 10 = No Trade)")
+offsetPct     = input.float(0.00495, "Offset % (0.00495 = 0.495%)", step = 0.00001)
 lineColor     = input.color(color.rgb(255, 0, 255), "Line Color")
 lineWidth     = input.int(3, "Line Width", minval = 1)
 
