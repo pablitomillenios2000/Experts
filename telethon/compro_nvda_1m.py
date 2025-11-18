@@ -31,7 +31,7 @@ async def main():
         print(f"Reading messages from: {entity.title} (ID: {channel})")
 
         # Calculate time range (last 10 days)
-        time_threshold = datetime.now() - timedelta(days=90)
+        time_threshold = datetime.now() - timedelta(days=365)
 
         # Prepare data for CSV
         messages_data = []
