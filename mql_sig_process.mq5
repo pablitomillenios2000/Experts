@@ -13,7 +13,7 @@
 struct Signal {
    datetime time;
    string type;
-   double price; // Added to store signal price for backtesting
+   double price; // Store signal price for backtesting
 };
 
 Signal signals[];
@@ -103,6 +103,73 @@ int OnInit() {
 void OnDeinit(const int reason) {
    // Clean up all objects created by the EA
    ObjectsDeleteAll(0, "Signal_");
+   ObjectsDeleteAll(0, "SL_");
+}
+
+//+------------------------------------------------------------------+
+//| Check if there is an open buy position                           |
+//+------------------------------------------------------------------+
+bool IsBuyPositionOpen() {
+   if (PositionsTotal() > 0) {
+      if (PositionSelect(_Symbol)) {
+         if (PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY) {
+            return true;
+         }
+      }
+   }
+   return false;
+}
+
+//+------------------------------------------------------------------+
+//| Check for stop-loss trigger and graph it                         |
+//+------------------------------------------------------------------+
+bool CheckAndGraphStopLoss() {
+   static ulong lastPositionTicket = 0;
+   static bool positionWasOpen = false;
+   static bool slGraphed = false; // Track if SL was graphed for the current trade
+
+   // Update position status
+   bool isPositionOpen = IsBuyPositionOpen();
+   if (isPositionOpen && PositionSelect(_Symbol)) {
+      lastPositionTicket = PositionGetInteger(POSITION_TICKET);
+      positionWasOpen = true;
+      slGraphed = false; // Reset for new position
+   }
+
+   // Check if a BUY position was closed (likely by SL)
+   if (positionWasOpen && !isPositionOpen && !slGraphed) {
+      if (HistorySelect(TimeCurrent() - 3600, TimeCurrent())) { // Check last hour for recent deals
+         for (int i = HistoryDealsTotal() - 1; i >= 0; i--) {
+            ulong dealTicket = HistoryDealGetTicket(i);
+            if (dealTicket > 0 && HistoryDealGetString(dealTicket, DEAL_SYMBOL) == _Symbol) {
+               if (HistoryDealGetInteger(dealTicket, DEAL_TYPE) == DEAL_TYPE_SELL &&
+                   HistoryDealGetInteger(dealTicket, DEAL_REASON) == DEAL_REASON_SL) {
+                  double closePrice = HistoryDealGetDouble(dealTicket, DEAL_PRICE);
+                  datetime closeTime = (datetime)HistoryDealGetInteger(dealTicket, DEAL_TIME);
+                  
+                  // Create a chart object for SL trigger
+                  string objName = "SL_Trigger_" + IntegerToString(dealTicket);
+                  if (!ObjectCreate(0, objName, OBJ_ARROW, 0, closeTime, closePrice)) {
+                     Print("Failed to create SL trigger object, Error: ", GetLastError());
+                  } else {
+                     ObjectSetInteger(0, objName, OBJPROP_COLOR, clrYellow);
+                     ObjectSetInteger(0, objName, OBJPROP_STYLE, STYLE_SOLID);
+                     ObjectSetInteger(0, objName, OBJPROP_WIDTH, 5);
+                     ObjectSetInteger(0, objName, OBJPROP_ARROWCODE, 159); // Circle symbol
+                     ObjectSetInteger(0, objName, OBJPROP_ANCHOR, ANCHOR_CENTER);
+                     ObjectSetDouble(0, objName, OBJPROP_SCALE, 2.0);
+                     Print("SL triggered at ", DoubleToString(closePrice, _Digits), " on ", TimeToString(closeTime));
+                  }
+                  slGraphed = true; // Mark SL as graphed
+                  positionWasOpen = false; // Reset position status
+                  return true; // SL was graphed
+               }
+            }
+         }
+      }
+   }
+
+   return false; // No SL triggered
 }
 
 //+------------------------------------------------------------------+
@@ -113,49 +180,107 @@ void OnTick() {
    // Use the current bar's open time for backtesting
    datetime currentBarTime = iTime(_Symbol, PERIOD_CURRENT, 0);
 
+   // Check for SL triggers
+   CheckAndGraphStopLoss();
+
    if (currentIndex >= signalCount) return;
 
    // Check if the current bar's time has reached or passed the signal's time
    if (currentBarTime >= signals[currentIndex].time) {
       CTrade trade;
       double lotSize = 30; // Adjusted for backtesting; modify as needed
-      ENUM_ORDER_TYPE orderType = (signals[currentIndex].type == "BUY") ? ORDER_TYPE_BUY : ORDER_TYPE_SELL;
+      string signalType = signals[currentIndex].type;
+      double signalPrice = signals[currentIndex].price > 0 ? signals[currentIndex].price : iOpen(_Symbol, PERIOD_CURRENT, 0);
 
-      // Use signal price if provided, otherwise use market price
-      double price = signals[currentIndex].price > 0 ? signals[currentIndex].price : 
-                     (orderType == ORDER_TYPE_BUY ? iOpen(_Symbol, PERIOD_CURRENT, 0) : iOpen(_Symbol, PERIOD_CURRENT, 0));
+      if (signalType == "BUY") {
+         ENUM_ORDER_TYPE orderType = ORDER_TYPE_BUY;
 
-      // Open position (use market price for execution in backtesting)
-      if (trade.PositionOpen(_Symbol, orderType, lotSize, price, 0, 0)) {
-         Print("Opened ", signals[currentIndex].type, " at signal time ", 
-               TimeToString(signals[currentIndex].time), 
-               ", bar time ", TimeToString(currentBarTime), 
-               ", price ", DoubleToString(price, _Digits));
+         // Open buy position without SL initially
+         if (trade.PositionOpen(_Symbol, orderType, lotSize, signalPrice, 0, 0)) {  // Use signalPrice for order
+            Print("Opened BUY at signal time ", TimeToString(signals[currentIndex].time), 
+                  ", bar time ", TimeToString(currentBarTime), 
+                  ", requested price ", DoubleToString(signalPrice, _Digits));
 
-         // Add a larger circle on the chart
-         string objName = "Signal_" + IntegerToString(currentIndex) + "_" + TimeToString(signals[currentIndex].time, TIME_DATE|TIME_MINUTES);
-         color clr = (orderType == ORDER_TYPE_BUY) ? clrGreen : clrRed;
+            // Get the position ticket
+            ulong positionTicket = 0;
+            if (PositionSelect(_Symbol)) {
+               positionTicket = PositionGetInteger(POSITION_TICKET);
+            }
+            
+            if (positionTicket > 0) {
+               double entryPrice = PositionGetDouble(POSITION_PRICE_OPEN);
+               double sl = NormalizeDouble(entryPrice * (1 - 0.006), _Digits); // Set SL 0.6% below entry
 
-         // Create an arrow (larger circle) object
-         if (!ObjectCreate(0, objName, OBJ_ARROW, 0, signals[currentIndex].time, price)) {
-            Print("Failed to create object for ", signals[currentIndex].type, ", Error: ", GetLastError());
+               // Modify to add SL
+               if (trade.PositionModify(positionTicket, sl, 0)) {
+                  Print("Added SL to BUY at ", DoubleToString(sl, _Digits));
+               } else {
+                  Print("Failed to add SL to BUY, Error: ", trade.ResultRetcode());
+               }
+
+               // Add a green circle for BUY entry
+               string objName = "Signal_" + IntegerToString(currentIndex) + "_" + TimeToString(signals[currentIndex].time, TIME_DATE|TIME_MINUTES);
+               color clr = clrGreen;
+
+               if (!ObjectCreate(0, objName, OBJ_ARROW, 0, signals[currentIndex].time, entryPrice)) {
+                  Print("Failed to create object for BUY, Error: ", GetLastError());
+               } else {
+                  ObjectSetInteger(0, objName, OBJPROP_COLOR, clr);
+                  ObjectSetInteger(0, objName, OBJPROP_STYLE, STYLE_SOLID);
+                  ObjectSetInteger(0, objName, OBJPROP_WIDTH, 5);
+                  ObjectSetInteger(0, objName, OBJPROP_ARROWCODE, 159); // Circle symbol
+                  ObjectSetInteger(0, objName, OBJPROP_ANCHOR, ANCHOR_CENTER);
+                  ObjectSetDouble(0, objName, OBJPROP_SCALE, 2.0);
+               }
+            } else {
+               Print("Failed to select position for BUY at signal time ", TimeToString(signals[currentIndex].time));
+            }
          } else {
-            ObjectSetInteger(0, objName, OBJPROP_COLOR, clr);
-            ObjectSetInteger(0, objName, OBJPROP_STYLE, STYLE_SOLID);
-            ObjectSetInteger(0, objName, OBJPROP_WIDTH, 5); // Increased width for larger circles
-            ObjectSetInteger(0, objName, OBJPROP_ARROWCODE, 159); // Circle symbol
-            ObjectSetInteger(0, objName, OBJPROP_ANCHOR, ANCHOR_CENTER);
-            ObjectSetDouble(0, objName, OBJPROP_SCALE, 2.0); // Scale factor to make the circle larger
+            Print("Failed to open BUY at signal time ", TimeToString(signals[currentIndex].time), 
+                  ", bar time ", TimeToString(currentBarTime), 
+                  ", requested price ", DoubleToString(signalPrice, _Digits), 
+                  ", Error: ", trade.ResultRetcode());
          }
-      } else {
-         Print("Failed to open ", signals[currentIndex].type, 
-               " at signal time ", TimeToString(signals[currentIndex].time), 
-               ", bar time ", TimeToString(currentBarTime), 
-               ", price ", DoubleToString(price, _Digits), 
-               ", Error: ", trade.ResultRetcode());
-      }
+         currentIndex++;
+      } else if (signalType == "SELL") {
+         // Check if there is an open buy position and SL has not been graphed
+         static bool slGraphed = false;
+         if (!slGraphed && IsBuyPositionOpen()) {
+            ENUM_ORDER_TYPE orderType = ORDER_TYPE_SELL;
 
-      currentIndex++;
+            // Open sell to close the buy
+            if (trade.PositionOpen(_Symbol, orderType, lotSize, signalPrice, 0, 0)) {  // Use signalPrice for order
+               Print("Opened SELL (close) at signal time ", TimeToString(signals[currentIndex].time), 
+                     ", bar time ", TimeToString(currentBarTime), 
+                     ", requested price ", DoubleToString(signalPrice, _Digits));
+
+               // Add a red circle for SELL
+               double exitPrice = signalPrice; // Use signal price for graphing
+               string objName = "Signal_" + IntegerToString(currentIndex) + "_" + TimeToString(signals[currentIndex].time, TIME_DATE|TIME_MINUTES);
+               color clr = clrRed;
+
+               if (!ObjectCreate(0, objName, OBJ_ARROW, 0, signals[currentIndex].time, exitPrice)) {
+                  Print("Failed to create object for SELL, Error: ", GetLastError());
+               } else {
+                  ObjectSetInteger(0, objName, OBJPROP_COLOR, clr);
+                  ObjectSetInteger(0, objName, OBJPROP_STYLE, STYLE_SOLID);
+                  ObjectSetInteger(0, objName, OBJPROP_WIDTH, 5);
+                  ObjectSetInteger(0, objName, OBJPROP_ARROWCODE, 159); // Circle symbol
+                  ObjectSetInteger(0, objName, OBJPROP_ANCHOR, ANCHOR_CENTER);
+                  ObjectSetDouble(0, objName, OBJPROP_SCALE, 2.0);
+               }
+            } else {
+               Print("Failed to open SELL at signal time ", TimeToString(signals[currentIndex].time), 
+                     ", bar time ", TimeToString(currentBarTime), 
+                     ", requested price ", DoubleToString(signalPrice, _Digits), 
+                     ", Error: ", trade.ResultRetcode());
+            }
+         } else {
+            Print("Skipping SELL at signal time ", TimeToString(signals[currentIndex].time), 
+                  " because no open BUY position or SL already triggered");
+         }
+         currentIndex++;
+      }
    }
 }
 //+------------------------------------------------------------------+

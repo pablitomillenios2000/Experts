@@ -1,0 +1,43 @@
+//@version=5
+indicator("Dynamic Offset Line (Manual Purchase Price)", overlay = true)
+
+// ─────────── INPUTS ───────────
+purchasePrice = input.float(0.0, "Purchase Price (Any value < 10 = No Trade)")
+offsetPct     = input.float(0.00495, "Offset % (0.00495 = 0.495%)", step = 0.00001)
+lineColor     = input.color(color.rgb(255, 0, 255), "Line Color")
+lineWidth     = input.int(3, "Line Width", minval = 1)
+
+// ─────────── VARIABLES ───────────
+var float fixedLevel = na
+
+// Create the line once
+var line dynLine = line.new(     bar_index, na,     bar_index + 1, na,     extend = extend.right,     color = lineColor,     width = lineWidth)
+
+// ─────────── CALCULATIONS ───────────
+dynamicLevel = close * (1 - offsetPct)
+entryLevel   = purchasePrice * (1 - offsetPct)
+
+// Use price < 10 as "no trade"
+posOpen = purchasePrice >= 10
+
+float currentLevel = na
+
+if posOpen
+    // Lock the level only once after trade
+    if na(fixedLevel)
+        fixedLevel := entryLevel
+
+    currentLevel := fixedLevel
+else
+    // No trade → dynamic
+    fixedLevel := na
+    currentLevel := dynamicLevel
+
+// ─────────── UPDATE LINE ───────────
+line.set_y1(dynLine, currentLevel)
+line.set_y2(dynLine, currentLevel)
+line.set_x1(dynLine, bar_index - 1000)
+line.set_x2(dynLine, bar_index + 10)
+
+line.set_color(dynLine, lineColor)
+line.set_width(dynLine, lineWidth)
